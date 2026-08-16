@@ -1,0 +1,18 @@
+{
+  "short_name": "StaffAttend",
+  "name": "StaffAttend - Sistem Kehadiran QR Kekal",
+  "description": "Platform Pengurusan Kehadiran QR Kekal & Cloud Sync untuk Acara & Program Staf",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/syncrozz/syncrozz-assets/main/logo/StaffAttend/android-chrome-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait"
+}

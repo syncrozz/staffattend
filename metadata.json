@@ -1,0 +1,10 @@
+{
+  "name": "Sistem Pengurusan Kehadiran",
+  "description": "Platform pengurusan kehadiran berasaskan acara (Event-Based Attendance Platform) dengan QR kekal staf, konteks event aktif, pengesanan duplicate, dan pusat operasi.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
