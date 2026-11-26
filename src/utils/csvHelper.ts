@@ -8,9 +8,25 @@ export interface CSVImportResult {
   errors: string[];
 }
 
+export interface CSVImportContext {
+  institutionId: string;
+  defaultEmailDomain?: string;
+  avatarBaseUrl?: string;
+}
+
+/**
+ * Neutralize CSV formula injection characters when exporting cells
+ */
+export function sanitizeCSVCell(value: string): string {
+  const safe = value.replace(/"/g, '""');
+  if (/^[=+\-@\t\r]/.test(safe)) {
+    return `'${safe}`;
+  }
+  return safe;
+}
+
 /**
  * Helper to parse CSV string into headers and rows.
- * Handles quotes and basic CSV formatting.
  */
 export function parseCSV(csvText: string): string[][] {
   const lines = csvText.split(/\r?\n/);
@@ -43,9 +59,13 @@ export function parseCSV(csvText: string): string[][] {
 }
 
 /**
- * Process CSV rows and merge with existing staff list.
+ * Process CSV rows and merge with existing institution staff list.
  */
-export function processStaffCSV(csvText: string, currentStaffList: Staff[]): CSVImportResult {
+export function processStaffCSV(
+  csvText: string,
+  currentStaffList: Staff[],
+  context: CSVImportContext
+): CSVImportResult {
   const rows = parseCSV(csvText);
   if (rows.length < 2) {
     return {
@@ -58,7 +78,6 @@ export function processStaffCSV(csvText: string, currentStaffList: Staff[]): CSV
 
   const headers = rows[0].map((h) => h.toLowerCase().trim());
 
-  // Find column indices
   const idIndex = headers.findIndex((h) =>
     ['id', 'staf id', 'id staf', 'no staf', 'staff_id', 'staffid'].some((k) => h.includes(k))
   );
@@ -95,6 +114,10 @@ export function processStaffCSV(csvText: string, currentStaffList: Staff[]): CSV
   const staffMap = new Map<string, Staff>();
   currentStaffList.forEach((s) => staffMap.set(s.id.toUpperCase(), { ...s }));
 
+  const fallbackEmail = context.defaultEmailDomain
+    ? `staff@${context.defaultEmailDomain.replace(/^@/, '')}`
+    : '';
+
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     const rawId = row[idIndex]?.trim();
@@ -105,23 +128,29 @@ export function processStaffCSV(csvText: string, currentStaffList: Staff[]): CSV
       continue;
     }
 
-    const id = rawId.toUpperCase();
-    const department = (deptIndex !== -1 && row[deptIndex]?.trim()) || 'Jabatan Pentadbiran';
-    const position = (posIndex !== -1 && row[posIndex]?.trim()) || 'Staf / Ahli';
-    const email = (emailIndex !== -1 && row[emailIndex]?.trim()) || 'staff@bpenawar.kpm.edu.my';
-    const phone = (phoneIndex !== -1 && row[phoneIndex]?.trim()) || '+60 12-000 0000';
+    const id = rawId.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (!id) {
+      skipped++;
+      continue;
+    }
+
+    const department = ((deptIndex !== -1 && row[deptIndex]?.trim()) || 'Pentadbiran').slice(0, 120);
+    const position = ((posIndex !== -1 && row[posIndex]?.trim()) || 'Staf').slice(0, 120);
+    const email = ((emailIndex !== -1 && row[emailIndex]?.trim()) || fallbackEmail).slice(0, 254);
+    const phone = ((phoneIndex !== -1 && row[phoneIndex]?.trim()) || '').slice(0, 40);
 
     const existing = staffMap.get(id);
 
     const staffObj: Staff = {
       id,
-      name: rawName,
+      institutionId: context.institutionId,
+      name: rawName.slice(0, 150),
       department,
       position,
       email,
-      phone,
-      status: 'ACTIVE',
-      avatarUrl: existing?.avatarUrl || buildStaffImageUrl(id)
+      ...(phone ? { phone } : {}),
+      status: existing?.status || 'ACTIVE',
+      avatarUrl: existing?.avatarUrl || buildStaffImageUrl(id, context.avatarBaseUrl)
     };
 
     if (existing) {
@@ -147,13 +176,13 @@ export function processStaffCSV(csvText: string, currentStaffList: Staff[]): CSV
 export function exportStaffToCSV(staffList: Staff[]): string {
   const headers = ['ID Staf', 'Nama Penuh', 'Jabatan / Unit', 'Jawatan', 'Emel', 'No Telefon', 'Status'];
   const rows = staffList.map((s) => [
-    `"${s.id}"`,
-    `"${s.name.replace(/"/g, '""')}"`,
-    `"${s.department.replace(/"/g, '""')}"`,
-    `"${s.position.replace(/"/g, '""')}"`,
-    `"${s.email}"`,
-    `"${s.phone || ''}"`,
-    `"${s.status}"`
+    `"${sanitizeCSVCell(s.id)}"`,
+    `"${sanitizeCSVCell(s.name)}"`,
+    `"${sanitizeCSVCell(s.department)}"`,
+    `"${sanitizeCSVCell(s.position)}"`,
+    `"${sanitizeCSVCell(s.email)}"`,
+    `"${sanitizeCSVCell(s.phone || '')}"`,
+    `"${sanitizeCSVCell(s.status)}"`
   ]);
 
   return [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -162,12 +191,11 @@ export function exportStaffToCSV(staffList: Staff[]): string {
 /**
  * Generate sample CSV template for download
  */
-export function getSampleStaffCSV(): string {
+export function getSampleStaffCSV(defaultDomain: string = 'institusi.edu.my'): string {
+  const cleanDomain = defaultDomain.replace(/^@/, '') || 'institusi.edu.my';
   return [
     'ID Staf,Nama Penuh,Jabatan / Unit,Jawatan,Emel,No Telefon',
-    'ST010,"Dr. Amirul Husni","Jabatan Sains Komputer","Pensyarah Kanan","amirul@institut.edu.my","+60 19-333 4455"',
-    'ST011,"Nurul Huda Abdullah","Teknologi Maklumat (IT)","Analisis Sistem","huda@institut.edu.my","+60 17-222 8899"',
-    'ST012,"Mohd Rashid Ismail","Kewangan & Sumber Manusia","Pegawai Kewangan","rashid@institut.edu.my","+60 13-999 1122"',
-    'ST013,"Siti Sarah Othman","Hal Ehwal Pelajar","Pegawai Belia","sarah@institut.edu.my","+60 11-4455 6677"'
+    `ST010,"Dr. Amirul Husni","Jabatan Sains Komputer","Pensyarah Kanan","amirul@${cleanDomain}","+60 19-333 4455"`,
+    `ST011,"Nurul Huda Abdullah","Teknologi Maklumat (IT)","Analisis Sistem","huda@${cleanDomain}","+60 17-222 8899"`
   ].join('\n');
 }

@@ -1,17 +1,11 @@
 import React, { useState } from 'react';
-import { 
-  Users, 
-  Search, 
-  Plus, 
-  QrCode, 
-  Printer, 
-  Download, 
-  CheckCircle2, 
-  Mail, 
-  Phone, 
+import {
+  Search,
+  Plus,
+  QrCode,
+  Printer,
+  Mail,
   Building2,
-  Sparkles,
-  Zap,
   Play,
   FileSpreadsheet,
   Lock,
@@ -25,31 +19,51 @@ import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK } from '../utils/staffUtils
 
 interface StaffDirectoryViewProps {
   staffList: Staff[];
-  isAdmin: boolean;
-  onAddStaff: (newStaff: Staff) => void;
-  onDeleteStaff?: (staffId: string) => void;
-  onSimulateScan: (staffId: string) => ScanResult;
-  onRequestAdminAccess: (actionName?: string) => void;
+  institutionId: string;
+  isInstitutionAdmin: boolean;
+  canScan: boolean;
+  qrPrefix?: string;
+  defaultEmailDomain?: string;
+  avatarBaseUrl?: string;
+  onAddStaff: (newStaff: Staff) => Promise<void>;
+  onDeleteStaff?: (staffId: string) => Promise<void>;
+  onSimulateScan: (staffId: string) => Promise<ScanResult>;
   onOpenCSVImport: () => void;
+}
+
+function getNextSuggestedStaffId(list: Staff[]): string {
+  let maxNum = 0;
+  list.forEach((s) => {
+    const match = s.id.toUpperCase().match(/^ST(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+  return `ST${String(maxNum + 1).padStart(3, '0')}`;
 }
 
 export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
   staffList,
-  isAdmin,
+  institutionId,
+  isInstitutionAdmin,
+  canScan,
+  qrPrefix = 'STAFF',
+  defaultEmailDomain,
+  avatarBaseUrl,
   onAddStaff,
   onDeleteStaff,
   onSimulateScan,
-  onRequestAdminAccess,
   onOpenCSVImport
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('ALL');
   const [selectedStaffForQR, setSelectedStaffForQR] = useState<Staff | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // New staff form state
   const [formData, setFormData] = useState({
-    id: `ST00${staffList.length + 1}`,
+    id: getNextSuggestedStaffId(staffList),
     name: '',
     department: 'Jabatan Sains Komputer',
     position: 'Pensyarah',
@@ -64,34 +78,52 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
     const matchesSearch =
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.email.toLowerCase().includes(searchTerm.toLowerCase());
+      (s.email || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesDept && matchesSearch;
   });
 
-  const handleCreateStaff = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim() || !formData.id.trim()) return;
-
-    onAddStaff({
-      id: formData.id.toUpperCase(),
-      name: formData.name,
-      department: formData.department,
-      position: formData.position,
-      email: formData.email || 'staff@bpenawar.kpm.edu.my',
-      phone: formData.phone || '+60 12-000 0000',
-      status: 'ACTIVE',
-      avatarUrl: buildStaffImageUrl(formData.id.toUpperCase())
-    });
-
-    setIsAddModalOpen(false);
+  const openAddModal = () => {
+    if (!isInstitutionAdmin) return;
     setFormData({
-      id: `ST00${staffList.length + 2}`,
+      id: getNextSuggestedStaffId(staffList),
       name: '',
       department: 'Jabatan Sains Komputer',
       position: 'Pensyarah',
       email: '',
       phone: ''
     });
+    setIsAddModalOpen(true);
+  };
+
+  const handleCreateStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isInstitutionAdmin || !formData.name.trim() || !formData.id.trim() || isSaving) return;
+
+    const cleanId = formData.id.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    if (!cleanId) return;
+
+    const fallbackEmail = defaultEmailDomain
+      ? `staff@${defaultEmailDomain.replace(/^@/, '')}`
+      : '';
+
+    setIsSaving(true);
+    try {
+      await onAddStaff({
+        id: cleanId,
+        institutionId,
+        name: formData.name.trim(),
+        department: formData.department.trim() || 'Pentadbiran',
+        position: formData.position.trim() || 'Staf',
+        email: formData.email.trim() || fallbackEmail,
+        ...(formData.phone.trim() ? { phone: formData.phone.trim() } : {}),
+        status: 'ACTIVE',
+        avatarUrl: buildStaffImageUrl(cleanId, avatarBaseUrl)
+      });
+
+      setIsAddModalOpen(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleExportCSV = () => {
@@ -100,32 +132,19 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'senarai_staf_my_attendance.csv');
+    const safeInst = institutionId.replace(/[^a-zA-Z0-9_-]/g, '_') || 'institusi';
+    link.setAttribute('download', `senarai_staf_${safeInst}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  // Print function
   const handlePrintQRCard = () => {
     window.print();
   };
 
-  const handleAddStaffClick = () => {
-    if (!isAdmin) {
-      onRequestAdminAccess('Pendaftaran Staf Baharu');
-    } else {
-      setIsAddModalOpen(true);
-    }
-  };
-
-  const handleCSVImportClick = () => {
-    if (!isAdmin) {
-      onRequestAdminAccess('Penyelarasan Data CSV Staf');
-    } else {
-      onOpenCSVImport();
-    }
-  };
+  const cleanPrefix = (qrPrefix || 'STAFF').toUpperCase();
 
   return (
     <div id="staff-directory-view" className="space-y-6">
@@ -142,33 +161,39 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
             Direktori Staf & Kad QR Kekal
           </h2>
           <p className="text-xs text-slate-400">
-            Setiap staf mempunyai <span className="text-indigo-300 font-bold">satu QR permanent</span> (e.g. <code className="text-indigo-400">STAFF|ST001</code>) yang dipakai merentasi semua jenis program.
+            Setiap staf mempunyai <span className="text-indigo-300 font-bold">satu QR permanent</span> (e.g.{' '}
+            <code className="text-indigo-400">{cleanPrefix}|ST001</code>) yang dipakai merentasi semua jenis program.
           </p>
         </div>
 
-        {/* Action Buttons: 2 equal buttons on mobile */}
-        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full md:w-auto">
-          <button
-            id="sync-csv-staff-btn"
-            onClick={handleCSVImportClick}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-3 py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer flex-1 sm:flex-none"
-            title="Import & Sync data ahli melalui CSV"
-          >
-            <FileSpreadsheet className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Sync CSV</span>
-            {!isAdmin && <Lock className="w-3 h-3 text-amber-300 ml-0.5 flex-shrink-0" />}
-          </button>
+        {/* Action Buttons */}
+        {isInstitutionAdmin ? (
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full md:w-auto">
+            <button
+              id="sync-csv-staff-btn"
+              onClick={onOpenCSVImport}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-3 py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer flex-1 sm:flex-none"
+              title="Import & Sync data ahli melalui CSV"
+            >
+              <FileSpreadsheet className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Sync CSV</span>
+            </button>
 
-          <button
-            id="add-new-staff-btn"
-            onClick={handleAddStaffClick}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-3 py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer flex-1 sm:flex-none"
-          >
-            <Plus className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">Daftar Staf</span>
-            {!isAdmin && <Lock className="w-3 h-3 text-amber-300 ml-0.5 flex-shrink-0" />}
-          </button>
-        </div>
+            <button
+              id="add-new-staff-btn"
+              onClick={openAddModal}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-3 py-2.5 rounded-xl transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer flex-1 sm:flex-none"
+            >
+              <Plus className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">Daftar Staf</span>
+            </button>
+          </div>
+        ) : (
+          <div className="inline-flex items-center space-x-1.5 bg-slate-800 border border-slate-700 text-slate-400 text-xs px-3 py-2 rounded-xl self-start md:self-auto">
+            <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <span>Mod Bacaan Sahaja (Perlu Peranan Admin)</span>
+          </div>
+        )}
       </div>
 
       {/* Search & Filters */}
@@ -208,87 +233,96 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
         </div>
       </div>
 
-
       {/* Staff Gallery Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {filteredStaff.map((staf) => (
-          <div
-            key={staf.id}
-            className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 shadow-sm transition-all space-y-3 flex flex-col justify-between"
-          >
-            <div className="space-y-3">
-              <div className="flex items-center space-x-3">
-                <img
-                  src={staf.avatarUrl || buildStaffImageUrl(staf.id)}
-                  alt={staf.name}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
-                  }}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/30 flex-shrink-0"
-                />
-                <div className="overflow-hidden">
-                  <span className="bg-indigo-500/20 text-indigo-300 font-mono font-bold text-[10px] px-2 py-0.5 rounded border border-indigo-500/30">
-                    {staf.id}
-                  </span>
-                  <h3 className="font-bold text-white text-xs sm:text-sm mt-1 truncate" title={staf.name}>
-                    {staf.name}
-                  </h3>
-                  <p className="text-[11px] text-slate-400 truncate">{staf.position}</p>
+      {filteredStaff.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center text-xs text-slate-500">
+          Tiada staf berdaftar dalam institusi ini.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {filteredStaff.map((staf) => (
+            <div
+              key={staf.id}
+              className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 shadow-sm transition-all space-y-3 flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <img
+                    src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
+                    alt={staf.name}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
+                    }}
+                    className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/30 flex-shrink-0"
+                  />
+                  <div className="overflow-hidden">
+                    <span className="bg-indigo-500/20 text-indigo-300 font-mono font-bold text-[10px] px-2 py-0.5 rounded border border-indigo-500/30">
+                      {staf.id}
+                    </span>
+                    <h3 className="font-bold text-white text-xs sm:text-sm mt-1 truncate" title={staf.name}>
+                      {staf.name}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 truncate">{staf.position}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                  <div className="flex items-center space-x-1.5 truncate">
+                    <Building2 className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                    <span className="truncate">{staf.department}</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5 truncate">
+                    <Mail className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                    <span className="truncate">{staf.email || '-'}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-1 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                <div className="flex items-center space-x-1.5 truncate">
-                  <Building2 className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                  <span className="truncate">{staf.department}</span>
-                </div>
-                <div className="flex items-center space-x-1.5 truncate">
-                  <Mail className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                  <span className="truncate">{staf.email || 'staff@bpenawar.kpm.edu.my'}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
-              <button
-                id={`staff-card-qr-btn-${staf.id}`}
-                onClick={() => setSelectedStaffForQR(staf)}
-                className="flex-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold py-1.5 rounded-xl transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
-              >
-                <QrCode className="w-3.5 h-3.5" />
-                <span>Kad QR Staf</span>
-              </button>
-
-              <button
-                id={`staff-card-test-btn-${staf.id}`}
-                onClick={() => onSimulateScan(staf.id)}
-                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
-                title="Uji imbas staf ini"
-              >
-                <Play className="w-3.5 h-3.5 text-emerald-400" />
-              </button>
-
-              {isAdmin && onDeleteStaff && (
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
                 <button
-                  id={`staff-card-delete-btn-${staf.id}`}
-                  onClick={() => {
-                    if (window.confirm(`Padam staf ${staf.name} (${staf.id})?`)) {
-                      onDeleteStaff(staf.id);
-                    }
-                  }}
-                  className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl transition-colors cursor-pointer"
-                  title="Padam staf ini"
+                  id={`staff-card-qr-btn-${staf.id}`}
+                  onClick={() => setSelectedStaffForQR(staf)}
+                  className="flex-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold py-1.5 rounded-xl transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Kad QR Staf</span>
                 </button>
-              )}
+
+                {isInstitutionAdmin && canScan && (
+                  <button
+                    id={`staff-card-test-btn-${staf.id}`}
+                    onClick={() => {
+                      void onSimulateScan(staf.id);
+                    }}
+                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
+                    title="Uji imbas staf ini"
+                  >
+                    <Play className="w-3.5 h-3.5 text-emerald-400" />
+                  </button>
+                )}
+
+                {isInstitutionAdmin && onDeleteStaff && (
+                  <button
+                    id={`staff-card-delete-btn-${staf.id}`}
+                    onClick={() => {
+                      if (window.confirm(`Padam staf ${staf.name} (${staf.id})?`)) {
+                        void onDeleteStaff(staf.id);
+                      }
+                    }}
+                    className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl transition-colors cursor-pointer"
+                    title="Padam staf ini"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Modal: Add New Staff */}
-      {isAddModalOpen && (
+      {isAddModalOpen && isInstitutionAdmin && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-white">
             <h3 className="text-lg font-bold">Daftar Staf Baharu</h3>
@@ -319,18 +353,13 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
 
               <div>
                 <label className="block text-slate-400 mb-1 font-semibold">Jabatan / Unit</label>
-                <select
+                <input
+                  type="text"
                   value={formData.department}
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  placeholder="e.g. Jabatan Sains Komputer"
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="Jabatan Sains Komputer">Jabatan Sains Komputer</option>
-                  <option value="Jabatan Kejuruteraan">Jabatan Kejuruteraan</option>
-                  <option value="Teknologi Maklumat (IT)">Teknologi Maklumat (IT)</option>
-                  <option value="Kewangan & Sumber Manusia">Kewangan & Sumber Manusia</option>
-                  <option value="Hal Ehwal Pelajar">Hal Ehwal Pelajar</option>
-                  <option value="Perpustakaan & Sumber">Perpustakaan & Sumber</option>
-                </select>
+                />
               </div>
 
               <div>
@@ -348,7 +377,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
                 <label className="block text-slate-400 mb-1 font-semibold">Emel Rasmi</label>
                 <input
                   type="email"
-                  placeholder="e.g. staff@bpenawar.kpm.edu.my"
+                  placeholder={defaultEmailDomain ? `e.g. staf@${defaultEmailDomain.replace(/^@/, '')}` : 'e.g. staf@institusi.edu.my'}
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
@@ -365,7 +394,8 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl shadow-md cursor-pointer"
+                  disabled={isSaving}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-xl shadow-md cursor-pointer"
                 >
                   Daftar Staf
                 </button>
@@ -400,7 +430,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
               {/* QR Code SVG */}
               <div className="p-3 bg-slate-50 inline-block rounded-xl border border-slate-200">
                 <QRCodeSVG
-                  value={`STAFF|${selectedStaffForQR.id}`}
+                  value={`${cleanPrefix}|${selectedStaffForQR.id}`}
                   size={160}
                   level="H"
                   includeMargin={false}
@@ -409,7 +439,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
 
               <div className="space-y-0.5">
                 <div className="text-xs font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded inline-block">
-                  STAFF|{selectedStaffForQR.id}
+                  {cleanPrefix}|{selectedStaffForQR.id}
                 </div>
                 <h4 className="font-extrabold text-sm text-slate-900 pt-1">
                   {selectedStaffForQR.name}
@@ -431,16 +461,18 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
                 <Printer className="w-3.5 h-3.5" />
                 <span>Cetak Kad</span>
               </button>
-              <button
-                onClick={() => {
-                  onSimulateScan(selectedStaffForQR.id);
-                  setSelectedStaffForQR(null);
-                }}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-md flex items-center space-x-1.5 cursor-pointer"
-              >
-                <Play className="w-3.5 h-3.5" />
-                <span>Uji Imbas</span>
-              </button>
+              {isInstitutionAdmin && canScan && (
+                <button
+                  onClick={() => {
+                    void onSimulateScan(selectedStaffForQR.id);
+                    setSelectedStaffForQR(null);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-4 py-2 rounded-xl shadow-md flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Uji Imbas</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -1,53 +1,215 @@
 {
   "entities": {
-    "staff": {
+    "PlatformOwner": {
+      "title": "Platform Owner",
+      "description": "Verified Platform Owner identity bound to authenticated Firebase UID",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 5, "maxLength": 254 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["PLATFORM_OWNER"] },
+        "status": { "type": "string", "enum": ["ACTIVE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastLoginAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "role", "status", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Authenticated user basic profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 5, "maxLength": 254 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "updatedAt"]
+    },
+    "UserMembership": {
+      "title": "User Institution Membership Mirror",
+      "description": "Per-user membership index for fast institution switching",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "institutionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "institutionName": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "institutionCode": { "type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[A-Z0-9_\\-]+$" },
+        "role": { "type": "string", "enum": ["INSTITUTION_ADMIN", "OPERATOR", "VIEWER"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "REVOKED"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "institutionId", "institutionName", "institutionCode", "role", "status", "updatedAt"]
+    },
+    "Institution": {
+      "title": "Institution",
+      "description": "Independent tenant institution profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 150 },
+        "code": { "type": "string", "minLength": 2, "maxLength": 32, "pattern": "^[A-Z0-9_\\-]+$" },
+        "domain": { "type": "string", "maxLength": 150 },
+        "status": { "type": "string", "enum": ["ACTIVE", "SUSPENDED"] },
+        "createdByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "code", "status", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "InstitutionSettings": {
+      "title": "Institution Settings",
+      "description": "Tenant-specific defaults and scanning policies",
+      "type": "object",
+      "properties": {
+        "institutionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "defaultEmailDomain": { "type": "string", "maxLength": 150 },
+        "avatarBaseUrl": { "type": "string", "maxLength": 500 },
+        "qrPrefix": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "allowManualOverride": { "type": "boolean" },
+        "requireAuthorizedDevice": { "type": "boolean" },
+        "timezone": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["institutionId", "qrPrefix", "allowManualOverride", "requireAuthorizedDevice", "timezone", "updatedByUid", "updatedAt"]
+    },
+    "InstitutionMember": {
+      "title": "Institution Member",
+      "description": "Authoritative role binding for a Google user inside an institution",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "institutionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 5, "maxLength": 254 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["INSTITUTION_ADMIN", "OPERATOR", "VIEWER"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "REVOKED"] },
+        "assignedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "institutionId", "email", "displayName", "role", "status", "assignedByUid", "createdAt", "updatedAt"]
+    },
+    "Staff": {
       "title": "Staff",
-      "description": "Master directory of staff members",
+      "description": "Master directory of institution staff with permanent QR identity",
+      "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Unique staff ID (e.g. ST001)" },
-        "name": { "type": "string", "description": "Full name" },
-        "department": { "type": "string", "description": "Department name" },
-        "position": { "type": "string", "description": "Job position" },
-        "email": { "type": "string", "description": "Email address" },
-        "phone": { "type": "string", "description": "Phone number" },
-        "avatarUrl": { "type": "string", "description": "Avatar URL" },
-        "status": { "type": "string", "description": "Status ACTIVE or INACTIVE" }
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "institutionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "department": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "position": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 254 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "name", "department", "position", "email", "status"]
+      "required": ["id", "institutionId", "name", "department", "position", "email", "status", "updatedByUid", "updatedAt"]
     },
-    "events": {
-      "title": "Events",
-      "description": "Event and meeting contexts",
+    "Event": {
+      "title": "Event",
+      "description": "Institution event and attendance context",
+      "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Event ID (e.g. E001)" },
-        "name": { "type": "string", "description": "Event name" },
-        "category": { "type": "string", "description": "Category" },
-        "date": { "type": "string", "description": "Event date" },
-        "startTime": { "type": "string", "description": "Start time" },
-        "endTime": { "type": "string", "description": "End time" },
-        "location": { "type": "string", "description": "Location" },
-        "status": { "type": "string", "description": "Status OPEN, CLOSED, or ARCHIVED" },
-        "description": { "type": "string", "description": "Description" },
-        "targetCount": { "type": "number", "description": "Target headcount" },
-        "createdAt": { "type": "string", "description": "Creation timestamp" }
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "institutionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "category": { "type": "string", "enum": ["Mesyuarat", "Program", "Kursus", "Taklimat", "Aktiviti", "Lain-lain"] },
+        "date": { "type": "string", "minLength": 10, "maxLength": 10 },
+        "startTime": { "type": "string", "minLength": 4, "maxLength": 10 },
+        "endTime": { "type": "string", "minLength": 4, "maxLength": 10 },
+        "location": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "status": { "type": "string", "enum": ["OPEN", "CLOSED", "ARCHIVED"] },
+        "description": { "type": "string", "maxLength": 1000 },
+        "targetCount": { "type": "number" },
+        "createdByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "name", "category", "date", "startTime", "endTime", "location", "status", "createdAt"]
+      "required": ["id", "institutionId", "name", "category", "date", "startTime", "endTime", "location", "status", "createdByUid", "createdAt", "updatedAt"]
     },
-    "attendanceRecords": {
-      "title": "Attendance Records",
-      "description": "Scan transactions recorded per event",
+    "AttendanceRecord": {
+      "title": "Attendance Record",
+      "description": "Atomic scan transaction keyed by {eventId}__{staffId}",
+      "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Unique attendance record ID" },
-        "eventId": { "type": "string", "description": "Event ID" },
-        "eventName": { "type": "string", "description": "Event Name" },
-        "staffId": { "type": "string", "description": "Staff ID" },
-        "staffName": { "type": "string", "description": "Staff Name" },
-        "staffDepartment": { "type": "string", "description": "Staff Department" },
-        "timestamp": { "type": "string", "description": "ISO timestamp" },
-        "formattedTime": { "type": "string", "description": "Formatted time display" },
-        "method": { "type": "string", "description": "Scan method" }
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "institutionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "staffId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "staffName": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "staffDepartment": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "formattedTime": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "method": { "type": "string", "enum": ["CAMERA_SCAN", "SIMULATOR", "MANUAL_OVERRIDE", "KIOSK_SCAN"] },
+        "scannerDeviceId": { "type": "string", "maxLength": 128 },
+        "recordedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
       },
-      "required": ["id", "eventId", "eventName", "staffId", "staffName", "staffDepartment", "timestamp", "formattedTime", "method"]
+      "required": ["id", "institutionId", "eventId", "eventName", "staffId", "staffName", "staffDepartment", "timestamp", "formattedTime", "method", "recordedByUid"]
+    },
+    "ScannerDevice": {
+      "title": "Authorized Scanner Device",
+      "description": "Admin-registered scanner device inside an institution",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "institutionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["ACTIVE", "REVOKED"] },
+        "registeredByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastSeenAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "institutionId", "label", "status", "registeredByUid", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/platformOwners/{ownerUid}": {
+      "schema": "PlatformOwner",
+      "description": "Verified Platform Owner identity records bound to Firebase UID"
+    },
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "Private user profile per authenticated UID"
+    },
+    "/users/{uid}/memberships/{institutionId}": {
+      "schema": "UserMembership",
+      "description": "User's active/revoked institution membership summaries"
+    },
+    "/institutions/{institutionId}": {
+      "schema": "Institution",
+      "description": "Independent institution tenant documents"
+    },
+    "/institutions/{institutionId}/settings/{settingId}": {
+      "schema": "InstitutionSettings",
+      "description": "Institution settings documents"
+    },
+    "/institutions/{institutionId}/members/{memberUid}": {
+      "schema": "InstitutionMember",
+      "description": "Institution membership and role assignments"
+    },
+    "/institutions/{institutionId}/staff/{staffId}": {
+      "schema": "Staff",
+      "description": "Institution staff directory with permanent QR identity"
+    },
+    "/institutions/{institutionId}/events/{eventId}": {
+      "schema": "Event",
+      "description": "Institution events and OPEN/CLOSED/ARCHIVED context"
+    },
+    "/institutions/{institutionId}/attendanceRecords/{recordId}": {
+      "schema": "AttendanceRecord",
+      "description": "Atomic attendance transactions keyed by {eventId}__{staffId}"
+    },
+    "/institutions/{institutionId}/scannerDevices/{deviceId}": {
+      "schema": "ScannerDevice",
+      "description": "Authorized scanner devices registered by institution admins"
     }
   }
 }

@@ -1,30 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  QrCode, 
-  Camera, 
-  Keyboard, 
-  CheckCircle2, 
-  AlertTriangle, 
-  XCircle, 
-  Volume2, 
-  VolumeX, 
-  RefreshCw, 
-  Radio, 
-  User, 
-  Zap,
-  ArrowRight,
+import {
+  Camera,
+  Keyboard,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Volume2,
+  VolumeX,
+  RefreshCw,
   Lock
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { EventItem, Staff, ScanResult } from '../types';
+import { EventItem, Staff, ScanResult, ScanMethod } from '../types';
 import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK } from '../utils/staffUtils';
 
 interface ScannerViewProps {
   activeEvent: EventItem | null;
   staffList: Staff[];
-  isAdmin?: boolean;
-  onRequestAdminAccess?: (actionName?: string) => void;
-  onProcessScan: (qrString: string, method: 'CAMERA_SCAN' | 'SIMULATOR' | 'MANUAL_OVERRIDE') => ScanResult;
+  isInstitutionAdmin: boolean;
+  canScan: boolean;
+  allowManualOverride: boolean;
+  qrPrefix?: string;
+  avatarBaseUrl?: string;
+  onProcessScan: (qrString: string, method: ScanMethod) => Promise<ScanResult>;
   onGoToEvents: () => void;
   soundEnabled: boolean;
   onToggleSound: (enabled: boolean) => void;
@@ -33,8 +31,11 @@ interface ScannerViewProps {
 export const ScannerView: React.FC<ScannerViewProps> = ({
   activeEvent,
   staffList,
-  isAdmin = false,
-  onRequestAdminAccess,
+  isInstitutionAdmin,
+  canScan,
+  allowManualOverride,
+  qrPrefix = 'STAFF',
+  avatarBaseUrl,
   onProcessScan,
   onGoToEvents,
   soundEnabled,
@@ -44,30 +45,35 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   const [manualCode, setManualCode] = useState('');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [pauseCountdown, setPauseCountdown] = useState(0);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isCameraActive, setIsCameraActive] = useState(false);
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const qrRegionId = 'html5qr-code-full-region';
 
-  // Fallback scan mode if not admin
+  const canUseSimulator = isInstitutionAdmin && allowManualOverride;
+
   useEffect(() => {
-    if (!isAdmin && scanMode === 'SIMULATOR') {
+    if (!canUseSimulator && scanMode === 'SIMULATOR') {
       setScanMode('CAMERA');
     }
-  }, [isAdmin, scanMode]);
+  }, [canUseSimulator, scanMode]);
 
-  // Handle Scan Execution with 2-second cooldown pause
-  const handleExecuteScan = (rawQr: string, method: 'CAMERA_SCAN' | 'SIMULATOR' | 'MANUAL_OVERRIDE') => {
-    if (isPaused) return;
+  const handleExecuteScan = async (rawQr: string, method: ScanMethod) => {
+    if (isPaused || isSubmitting || !canScan) return;
 
-    const result = onProcessScan(rawQr, method);
-    setScanResult(result);
+    setIsSubmitting(true);
     setIsPaused(true);
     setPauseCountdown(2);
 
-    // Countdown interval for auto resume
+    try {
+      const result = await onProcessScan(rawQr, method);
+      setScanResult(result);
+    } finally {
+      setIsSubmitting(false);
+    }
+
     const interval = setInterval(() => {
       setPauseCountdown((prev) => {
         if (prev <= 1) {
@@ -80,17 +86,14 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
     }, 1000);
   };
 
-  // Start / Stop Camera scanner safely using html5-qrcode
   useEffect(() => {
     let isMounted = true;
 
     const startScanner = async () => {
-      if (scanMode !== 'CAMERA') {
-        setIsCameraActive(false);
+      if (scanMode !== 'CAMERA' || !canScan) {
         return;
       }
 
-      // Cleanup any previous instance
       if (html5QrCodeRef.current) {
         try {
           if (html5QrCodeRef.current.isScanning) {
@@ -101,7 +104,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
         html5QrCodeRef.current = null;
       }
 
-      // Ensure DOM element container is completely clean before instantiating new scanner
       const container = document.getElementById(qrRegionId);
       if (container) {
         container.innerHTML = '';
@@ -124,27 +126,25 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               handleExecuteScan(decodedText, 'CAMERA_SCAN');
             }
           },
-          () => {
-            // scan failure callback (silent during scanning)
-          }
+          () => {}
         );
 
         if (!isMounted) {
           if (html5QrCode.isScanning) {
             await html5QrCode.stop();
-            try { html5QrCode.clear(); } catch (_) {}
+            try {
+              html5QrCode.clear();
+            } catch (_) {}
           }
           const el = document.getElementById(qrRegionId);
           if (el) el.innerHTML = '';
         } else {
-          setIsCameraActive(true);
           setCameraError(null);
         }
       } catch (err) {
         if (isMounted) {
           console.error('Camera start error', err);
-          setCameraError('Kamera tidak dapat diakses atau kebenaran ditolak. Sila gunakan Mod Simulasi Manual.');
-          setIsCameraActive(false);
+          setCameraError('Kamera tidak dapat diakses atau kebenaran ditolak.');
         }
       }
     };
@@ -166,20 +166,26 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
           } catch (_) {}
           const el = document.getElementById(qrRegionId);
           if (el) el.innerHTML = '';
-          setIsCameraActive(false);
         };
         cleanup();
       } else {
         const el = document.getElementById(qrRegionId);
         if (el) el.innerHTML = '';
-        setIsCameraActive(false);
       }
     };
-  }, [scanMode]);
+  }, [scanMode, canScan]);
+
+  if (!canScan) {
+    return (
+      <div className="p-6 bg-rose-950/40 border border-rose-500/40 rounded-2xl text-xs text-rose-200 flex items-center space-x-2">
+        <Lock className="w-4 h-4 text-rose-400" />
+        <span>Peranan anda (`VIEWER`) tidak mempunyai kebenaran merekod imbasan kehadiran.</span>
+      </div>
+    );
+  }
 
   return (
     <div id="scanner-view-container" className="max-w-4xl mx-auto space-y-6">
-      {/* Active Event Context Header */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 text-white shadow-lg space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
@@ -187,7 +193,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                 Pengimbas QR Kehadiran
               </span>
-              <span className="text-slate-400 text-xs">Simplicity by Default</span>
+              <span className="text-slate-400 text-xs">Server-Confirmed Transaction</span>
             </div>
             <h2 className="text-xl font-bold tracking-tight text-white">
               Pengimbas Identiti Staf (Staff QR Scanner)
@@ -209,7 +215,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
           </div>
         </div>
 
-        {/* Current Active Event Bar */}
         {activeEvent ? (
           <div className="bg-emerald-950/60 border border-emerald-500/40 rounded-xl p-3.5 flex items-center justify-between text-xs">
             <div className="flex items-center space-x-3">
@@ -237,17 +242,15 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               onClick={onGoToEvents}
               className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3 py-1.5 rounded-lg transition-colors cursor-pointer text-xs"
             >
-              Buka Event
+              Lihat Event
             </button>
           </div>
         )}
       </div>
 
-      {/* Main Scanner Card */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-        {/* Mode Selector Tabs */}
         <div className="flex rounded-xl bg-slate-800/80 p-1 border border-slate-700 max-w-md mx-auto">
-          {isAdmin ? (
+          {canUseSimulator ? (
             <button
               id="scanner-mode-sim-btn"
               onClick={() => setScanMode('SIMULATOR')}
@@ -261,15 +264,10 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               <span>Simulasi & Carian Kad</span>
             </button>
           ) : (
-            <button
-              id="scanner-mode-sim-btn"
-              onClick={() => onRequestAdminAccess?.('Mod Simulasi & Carian Kad')}
-              className="flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-amber-300 transition-all flex items-center justify-center space-x-1.5 cursor-pointer hover:bg-slate-700/50"
-              title="Aktifkan Mod Admin untuk Akses Simulasi"
-            >
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
-              <span>Simulasi (Admin Mode)</span>
-            </button>
+            <div className="flex-1 py-2 text-xs font-semibold rounded-lg text-slate-500 flex items-center justify-center space-x-1.5">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Simulasi (Admin Sahaja)</span>
+            </div>
           )}
 
           <button
@@ -286,18 +284,18 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
           </button>
         </div>
 
-        {/* Camera Scanner Container */}
         {scanMode === 'CAMERA' && (
           <div className="space-y-4 max-w-md mx-auto">
             <div className="relative rounded-2xl overflow-hidden bg-slate-950 border-2 border-indigo-500/50 shadow-inner">
               <div id={qrRegionId} className="w-full min-h-[300px]"></div>
 
-              {/* Cooldown Overlay */}
-              {isPaused && (
+              {(isPaused || isSubmitting) && (
                 <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-2 z-20">
                   <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
-                  <span className="font-bold text-sm">Menunggu imbasan seterusnya...</span>
-                  <span className="text-xs text-slate-400">Jeda automatik ({pauseCountdown}s)</span>
+                  <span className="font-bold text-sm">
+                    {isSubmitting ? 'Mengesahkan transaksi Firestore...' : 'Menunggu imbasan seterusnya...'}
+                  </span>
+                  {!isSubmitting && <span className="text-xs text-slate-400">Jeda automatik ({pauseCountdown}s)</span>}
                 </div>
               )}
             </div>
@@ -305,36 +303,30 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
             {cameraError && (
               <div className="bg-rose-950/40 border border-rose-800/40 p-3.5 rounded-xl text-xs text-rose-300 text-center space-y-2">
                 <p>{cameraError}</p>
-                <button
-                  onClick={() => {
-                    if (isAdmin) {
-                      setScanMode('SIMULATOR');
-                    } else {
-                      onRequestAdminAccess?.('Mod Simulasi Staf');
-                    }
-                  }}
-                  className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-medium cursor-pointer"
-                >
-                  Guna Mod Simulasi Staf {isAdmin ? '' : '(Kunci Admin)'}
-                </button>
+                {canUseSimulator && (
+                  <button
+                    onClick={() => setScanMode('SIMULATOR')}
+                    className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg font-medium cursor-pointer"
+                  >
+                    Guna Mod Simulasi / Manual Admin
+                  </button>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* Simulator & Manual Input Container (Only when Admin Mode is Active) */}
-        {isAdmin && scanMode === 'SIMULATOR' && (
+        {canUseSimulator && scanMode === 'SIMULATOR' && (
           <div className="space-y-6">
-            {/* Direct Input Form */}
             <div className="max-w-md mx-auto space-y-2">
               <label className="text-xs font-semibold text-slate-300 block">
-                Masukkan / Tampal Kod QR Staf (Contoh: <code className="text-indigo-400">STAFF|ST001</code> atau <code className="text-indigo-400">ST001</code>)
+                Masukkan / Tampal Kod QR Staf (Contoh: <code className="text-indigo-400">{qrPrefix}|ST001</code>)
               </label>
               <div className="flex gap-2">
                 <input
                   id="scanner-manual-qr-input"
                   type="text"
-                  placeholder="e.g. STAFF|ST001"
+                  placeholder={`e.g. ${qrPrefix}|ST001`}
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                   onKeyDown={(e) => {
@@ -353,7 +345,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                       setManualCode('');
                     }
                   }}
-                  disabled={!manualCode.trim() || isPaused}
+                  disabled={!manualCode.trim() || isPaused || isSubmitting}
                   className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
                 >
                   Imbas
@@ -361,7 +353,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               </div>
             </div>
 
-            {/* Quick Staff QR Scanner Cards Grid */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-slate-300">Pilih Staf Untuk Diimbas (Permanent QR Identity):</span>
@@ -373,12 +364,12 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                   <button
                     key={staf.id}
                     id={`scan-card-staff-${staf.id}`}
-                    onClick={() => handleExecuteScan(`STAFF|${staf.id}`, 'SIMULATOR')}
-                    disabled={isPaused}
+                    onClick={() => handleExecuteScan(`${qrPrefix}|${staf.id}`, 'SIMULATOR')}
+                    disabled={isPaused || isSubmitting}
                     className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 hover:border-indigo-500/50 rounded-xl transition-all text-left cursor-pointer group flex items-center space-x-3 disabled:opacity-50"
                   >
                     <img
-                      src={staf.avatarUrl || buildStaffImageUrl(staf.id)}
+                      src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
                       alt={staf.name}
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
@@ -390,7 +381,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                         {staf.name}
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
-                        <span className="text-indigo-400 font-bold">STAFF|{staf.id}</span>
+                        <span className="text-indigo-400 font-bold">{qrPrefix}|{staf.id}</span>
                       </div>
                       <div className="text-[10px] text-slate-400 truncate">{staf.department}</div>
                     </div>
@@ -401,7 +392,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
           </div>
         )}
 
-        {/* Instant Scan Result Feedback Modal / Display (Section 13 requirement) */}
         {scanResult && (
           <div
             className={`p-5 rounded-2xl border transition-all animate-fadeIn ${
@@ -425,9 +415,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
 
               <div className="space-y-1 flex-1">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-extrabold tracking-tight">
-                    {scanResult.title}
-                  </h3>
+                  <h3 className="text-lg font-extrabold tracking-tight">{scanResult.title}</h3>
                   {scanResult.timestamp && (
                     <span className="text-xs font-mono bg-black/30 px-2.5 py-1 rounded-full border border-white/10">
                       {scanResult.timestamp}
@@ -435,9 +423,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                   )}
                 </div>
 
-                <p className="text-xs sm:text-sm font-medium leading-relaxed opacity-90">
-                  {scanResult.message}
-                </p>
+                <p className="text-xs sm:text-sm font-medium leading-relaxed opacity-90">{scanResult.message}</p>
 
                 {scanResult.staff && (
                   <div className="pt-2 flex items-center space-x-3 border-t border-white/10 mt-2">

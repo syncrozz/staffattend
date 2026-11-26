@@ -1,26 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { QrCode, Volume2, VolumeX, RefreshCw, Radio, Lock, ShieldCheck, Cloud, Download } from 'lucide-react';
-import { EventItem } from '../types';
+import { QrCode, Volume2, VolumeX, Radio, ShieldCheck, Cloud, Download, LogOut, Building2 } from 'lucide-react';
+import { EventItem, InstitutionRole } from '../types';
 import { soundService } from '../services/soundService';
+
+interface InstitutionOption {
+  id: string;
+  name: string;
+  code: string;
+}
 
 interface HeaderProps {
   activeEvent: EventItem | null;
   soundEnabled: boolean;
-  isAdmin: boolean;
+  userEmail: string;
+  isPlatformOwner: boolean;
+  effectiveRole: InstitutionRole | null;
+  activeInstitutionId: string | null;
+  institutions: InstitutionOption[];
+  canScan: boolean;
+  onSelectInstitution: (id: string) => void;
   onToggleSound: (enabled: boolean) => void;
-  onResetData: () => void;
   onOpenScanner: () => void;
-  onToggleAdminMode: () => void;
+  onSignOut: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeEvent,
   soundEnabled,
-  isAdmin,
+  userEmail,
+  isPlatformOwner,
+  effectiveRole,
+  activeInstitutionId,
+  institutions,
+  canScan,
+  onSelectInstitution,
   onToggleSound,
-  onResetData,
   onOpenScanner,
-  onToggleAdminMode
+  onSignOut
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
@@ -51,10 +67,11 @@ export const Header: React.FC<HeaderProps> = ({
     }
     setDeferredPrompt(null);
   };
+
   return (
     <header id="main-app-header" className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-40 shadow-md">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 sm:gap-3">
-        {/* Row 1 on Mobile: Brand identity + Admin Mode button */}
+        {/* Row 1: Brand identity + Auth & Institution Switcher */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center space-x-2.5">
             <img
@@ -69,10 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-white">STAFF</span>
                   <span className="text-blue-400">ATTEND</span>
                 </h1>
-                <span className="hidden sm:inline-block bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] px-2 py-0.5 rounded-full font-mono">
-                  v2.0 Concept
-                </span>
-                <span className="inline-flex items-center space-x-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-sans font-medium" title="Data diselaraskan ke Firebase Cloud Store">
+                <span className="inline-flex items-center space-x-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-sans font-medium">
                   <Cloud className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-400" />
                   <span>Cloud Synced</span>
                 </span>
@@ -93,38 +107,51 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
               <p className="text-[10px] sm:text-xs text-slate-400 hidden xs:block truncate">
-                Permanent QR to All Members For All Event
+                {userEmail}
+                {isPlatformOwner ? ' • PLATFORM_OWNER' : ''}
+                {effectiveRole ? ` • ${effectiveRole}` : ''}
               </p>
             </div>
           </div>
 
-          {/* Admin Mode Toggle Button on Top Right (Mobile & Desktop) */}
-          <button
-            id="header-admin-mode-btn"
-            onClick={onToggleAdminMode}
-            className={`px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center space-x-1 sm:space-x-1.5 cursor-pointer border flex-shrink-0 ${
-              isAdmin
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30 shadow-sm'
-                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:border-slate-600'
-            }`}
-            title={isAdmin ? 'Klik untuk keluar dari Mod Admin' : 'Klik untuk aktifkan Mod Admin'}
-          >
-            {isAdmin ? (
-              <>
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                <span>ADMIN (AKTIF)</span>
-              </>
-            ) : (
-              <>
-                <Lock className="w-3.5 h-3.5 text-slate-400" />
-                <span>ADMIN MODE</span>
-              </>
+          <div className="flex items-center space-x-1.5 flex-shrink-0">
+            {isPlatformOwner && (
+              <span className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span>OWNER</span>
+              </span>
             )}
-          </button>
+            <button
+              id="header-signout-btn"
+              onClick={onSignOut}
+              className="px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center space-x-1 cursor-pointer"
+              title="Log keluar daripada akaun Google"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Log Keluar</span>
+            </button>
+          </div>
         </div>
 
-        {/* Row 2 on Mobile: Active Event Banner & Action Controls */}
+        {/* Row 2: Institution Switcher + Active Event Banner + Action Controls */}
         <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+          {institutions.length > 0 && (
+            <div className="flex items-center bg-slate-800 border border-slate-700 rounded-xl px-2 py-1 text-[11px] sm:text-xs flex-shrink-0">
+              <Building2 className="w-3.5 h-3.5 text-indigo-400 mr-1.5 flex-shrink-0" />
+              <select
+                value={activeInstitutionId || ''}
+                onChange={(e) => onSelectInstitution(e.target.value)}
+                className="bg-slate-800 text-white font-semibold focus:outline-none cursor-pointer max-w-[160px] truncate"
+              >
+                {institutions.map((inst) => (
+                  <option key={inst.id} value={inst.id}>
+                    {inst.code} — {inst.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Event Status Badge */}
           {activeEvent ? (
             <div className="flex items-center bg-emerald-950/80 border border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-[11px] sm:text-xs text-emerald-200 flex-1 min-w-0">
@@ -146,17 +173,17 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Quick Controls */}
           <div className="flex items-center space-x-1.5 flex-shrink-0">
-            {/* Quick Scanner Action */}
-            <button
-              id="header-quick-scanner-btn"
-              onClick={onOpenScanner}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] sm:text-xs px-2.5 sm:px-3 py-1.5 rounded-xl transition-all shadow-sm flex items-center space-x-1 cursor-pointer"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span className="hidden xs:inline">Pengimbas</span>
-            </button>
+            {canScan && (
+              <button
+                id="header-quick-scanner-btn"
+                onClick={onOpenScanner}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-[11px] sm:text-xs px-2.5 sm:px-3 py-1.5 rounded-xl transition-all shadow-sm flex items-center space-x-1 cursor-pointer"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span className="hidden xs:inline">Pengimbas</span>
+              </button>
+            )}
 
-            {/* Sound Toggle */}
             <button
               id="header-sound-toggle-btn"
               onClick={() => {
@@ -173,20 +200,9 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
             </button>
-
-            {/* Reset Demo Data */}
-            <button
-              id="header-reset-demo-btn"
-              onClick={onResetData}
-              title="Reset Data Sampel Demo"
-              className="p-1.5 sm:p-2 rounded-xl border border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors text-xs cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
       </div>
     </header>
-
   );
 };

@@ -1,14 +1,493 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /staff/{staffId} {
-      allow read, write: if true;
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
     }
-    match /events/{eventId} {
-      allow read, write: if true;
+
+    // =========================================================================
+    // PRIMITIVE HELPERS
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
-    match /attendanceRecords/{recordId} {
-      allow read, write: if true;
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedGoogleUser() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    // Approved Dual Platform Owner bootstrap allowlist (server-verified email + verified Google token)
+    function isApprovedBootstrapOwnerEmail() {
+      return isVerifiedGoogleUser()
+        && request.auth.token.email.lower() in [
+          'khaikerr@gmail.com',
+          'festivalseni.kpmbp@gmail.com'
+        ];
+    }
+
+    // Authoritative Platform Owner check: requires verified Google email AND bound Firestore UID doc
+    function isPlatformOwner() {
+      return isApprovedBootstrapOwnerEmail()
+        && exists(/databases/$(database)/documents/platformOwners/$(request.auth.uid))
+        && get(/databases/$(database)/documents/platformOwners/$(request.auth.uid)).data.status == 'ACTIVE'
+        && get(/databases/$(database)/documents/platformOwners/$(request.auth.uid)).data.role == 'PLATFORM_OWNER'
+        && get(/databases/$(database)/documents/platformOwners/$(request.auth.uid)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/platformOwners/$(request.auth.uid)).data.email == request.auth.token.email.lower();
+    }
+
+    function isActiveMember(institutionId) {
+      return isVerifiedGoogleUser()
+        && isValidId(institutionId)
+        && exists(/databases/$(database)/documents/institutions/$(institutionId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/members/$(request.auth.uid)).data.status == 'ACTIVE'
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/members/$(request.auth.uid)).data.uid == request.auth.uid;
+    }
+
+    function hasInstitutionRole(institutionId, allowedRoles) {
+      return isActiveMember(institutionId)
+        && get(/databases/$(database)/documents/institutions/$(institutionId)/members/$(request.auth.uid)).data.role in allowedRoles;
+    }
+
+    function isInstitutionAdmin(institutionId) {
+      return hasInstitutionRole(institutionId, ['INSTITUTION_ADMIN']);
+    }
+
+    function isInstitutionOperator(institutionId) {
+      return hasInstitutionRole(institutionId, ['INSTITUTION_ADMIN', 'OPERATOR']);
+    }
+
+    function isInstitutionViewer(institutionId) {
+      return hasInstitutionRole(institutionId, ['INSTITUTION_ADMIN', 'OPERATOR', 'VIEWER']);
+    }
+
+    // =========================================================================
+    // VALIDATION BLUEPRINTS (MATCHING firebase-blueprint.json)
+    // =========================================================================
+    function isValidPlatformOwner(data, ownerUid) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'status', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'status', 'createdAt', 'lastLoginAt'])
+        && isValidId(data.uid)
+        && data.uid == ownerUid
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 254
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.role == 'PLATFORM_OWNER'
+        && data.status == 'ACTIVE'
+        && data.createdAt is timestamp
+        && (!('lastLoginAt' in data) || data.lastLoginAt is timestamp);
+    }
+
+    function isValidUserProfile(data, uid) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'updatedAt'])
+        && isValidId(data.uid) && data.uid == uid
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 254
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserMembership(data, uid, institutionId) {
+      return data.keys().hasAll(['uid', 'institutionId', 'institutionName', 'institutionCode', 'role', 'status', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'institutionId', 'institutionName', 'institutionCode', 'role', 'status', 'updatedAt'])
+        && isValidId(data.uid) && data.uid == uid
+        && isValidId(data.institutionId) && data.institutionId == institutionId
+        && data.institutionName is string && data.institutionName.size() >= 1 && data.institutionName.size() <= 150
+        && data.institutionCode is string && data.institutionCode.size() >= 1 && data.institutionCode.size() <= 32 && data.institutionCode.matches('^[A-Z0-9_\\-]+$')
+        && data.role in ['INSTITUTION_ADMIN', 'OPERATOR', 'VIEWER']
+        && data.status in ['ACTIVE', 'REVOKED']
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidInstitution(data, institutionId) {
+      return data.keys().hasAll(['id', 'name', 'code', 'status', 'createdByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'name', 'code', 'domain', 'status', 'createdByUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.id) && data.id == institutionId
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 150
+        && data.code is string && data.code.size() >= 2 && data.code.size() <= 32 && data.code.matches('^[A-Z0-9_\\-]+$')
+        && (!('domain' in data) || (data.domain is string && data.domain.size() <= 150))
+        && data.status in ['ACTIVE', 'SUSPENDED']
+        && isValidId(data.createdByUid)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidInstitutionSettings(data, institutionId) {
+      return data.keys().hasAll(['institutionId', 'qrPrefix', 'allowManualOverride', 'requireAuthorizedDevice', 'timezone', 'updatedByUid', 'updatedAt'])
+        && data.keys().hasOnly(['institutionId', 'defaultEmailDomain', 'avatarBaseUrl', 'qrPrefix', 'allowManualOverride', 'requireAuthorizedDevice', 'timezone', 'updatedByUid', 'updatedAt'])
+        && isValidId(data.institutionId) && data.institutionId == institutionId
+        && (!('defaultEmailDomain' in data) || (data.defaultEmailDomain is string && data.defaultEmailDomain.size() <= 150))
+        && (!('avatarBaseUrl' in data) || (data.avatarBaseUrl is string && data.avatarBaseUrl.size() <= 500))
+        && data.qrPrefix is string && data.qrPrefix.size() >= 1 && data.qrPrefix.size() <= 32
+        && data.allowManualOverride is bool
+        && data.requireAuthorizedDevice is bool
+        && data.timezone is string && data.timezone.size() >= 1 && data.timezone.size() <= 64
+        && isValidId(data.updatedByUid)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidInstitutionMember(data, institutionId, memberUid) {
+      return data.keys().hasAll(['uid', 'institutionId', 'email', 'displayName', 'role', 'status', 'assignedByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'institutionId', 'email', 'displayName', 'role', 'status', 'assignedByUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid) && data.uid == memberUid
+        && isValidId(data.institutionId) && data.institutionId == institutionId
+        && data.email is string && data.email.size() >= 5 && data.email.size() <= 254
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.role in ['INSTITUTION_ADMIN', 'OPERATOR', 'VIEWER']
+        && data.status in ['ACTIVE', 'REVOKED']
+        && isValidId(data.assignedByUid)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStaff(data, institutionId, staffId) {
+      return data.keys().hasAll(['id', 'institutionId', 'name', 'department', 'position', 'email', 'status', 'updatedByUid', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'institutionId', 'name', 'department', 'position', 'email', 'phone', 'avatarUrl', 'status', 'updatedByUid', 'updatedAt'])
+        && isValidId(data.id) && data.id == staffId
+        && isValidId(data.institutionId) && data.institutionId == institutionId
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 150
+        && data.department is string && data.department.size() >= 1 && data.department.size() <= 120
+        && data.position is string && data.position.size() >= 1 && data.position.size() <= 120
+        && data.email is string && data.email.size() <= 254
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 40))
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 500))
+        && data.status in ['ACTIVE', 'INACTIVE']
+        && isValidId(data.updatedByUid)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidEvent(data, institutionId, eventId) {
+      return data.keys().hasAll(['id', 'institutionId', 'name', 'category', 'date', 'startTime', 'endTime', 'location', 'status', 'createdByUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'institutionId', 'name', 'category', 'date', 'startTime', 'endTime', 'location', 'status', 'description', 'targetCount', 'createdByUid', 'createdAt', 'updatedAt'])
+        && isValidId(data.id) && data.id == eventId
+        && isValidId(data.institutionId) && data.institutionId == institutionId
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 200
+        && data.category in ['Mesyuarat', 'Program', 'Kursus', 'Taklimat', 'Aktiviti', 'Lain-lain']
+        && data.date is string && data.date.size() == 10
+        && data.startTime is string && data.startTime.size() >= 4 && data.startTime.size() <= 10
+        && data.endTime is string && data.endTime.size() >= 4 && data.endTime.size() <= 10
+        && data.location is string && data.location.size() >= 1 && data.location.size() <= 150
+        && data.status in ['OPEN', 'CLOSED', 'ARCHIVED']
+        && (!('description' in data) || (data.description is string && data.description.size() <= 1000))
+        && (!('targetCount' in data) || (data.targetCount is number && data.targetCount >= 0 && data.targetCount <= 100000))
+        && isValidId(data.createdByUid)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAttendanceRecord(data, institutionId, recordId) {
+      return data.keys().hasAll(['id', 'institutionId', 'eventId', 'eventName', 'staffId', 'staffName', 'staffDepartment', 'timestamp', 'formattedTime', 'method', 'recordedByUid'])
+        && data.keys().hasOnly(['id', 'institutionId', 'eventId', 'eventName', 'staffId', 'staffName', 'staffDepartment', 'timestamp', 'formattedTime', 'method', 'scannerDeviceId', 'recordedByUid'])
+        && isValidId(data.id) && data.id == recordId
+        && isValidId(data.institutionId) && data.institutionId == institutionId
+        && isValidId(data.eventId)
+        && isValidId(data.staffId)
+        && recordId == (data.eventId + '__' + data.staffId)
+        && data.eventName is string && data.eventName.size() >= 1 && data.eventName.size() <= 200
+        && data.staffName is string && data.staffName.size() >= 1 && data.staffName.size() <= 150
+        && data.staffDepartment is string && data.staffDepartment.size() >= 1 && data.staffDepartment.size() <= 120
+        && data.timestamp is timestamp
+        && data.formattedTime is string && data.formattedTime.size() >= 1 && data.formattedTime.size() <= 32
+        && data.method in ['CAMERA_SCAN', 'SIMULATOR', 'MANUAL_OVERRIDE', 'KIOSK_SCAN']
+        && (!('scannerDeviceId' in data) || isValidId(data.scannerDeviceId))
+        && isValidId(data.recordedByUid) && data.recordedByUid == request.auth.uid;
+    }
+
+    function isValidScannerDevice(data, institutionId, deviceId) {
+      return data.keys().hasAll(['id', 'institutionId', 'label', 'status', 'registeredByUid', 'createdAt'])
+        && data.keys().hasOnly(['id', 'institutionId', 'label', 'status', 'registeredByUid', 'createdAt', 'lastSeenAt'])
+        && isValidId(data.id) && data.id == deviceId
+        && isValidId(data.institutionId) && data.institutionId == institutionId
+        && data.label is string && data.label.size() >= 1 && data.label.size() <= 120
+        && data.status in ['ACTIVE', 'REVOKED']
+        && isValidId(data.registeredByUid)
+        && data.createdAt is timestamp
+        && (!('lastSeenAt' in data) || data.lastSeenAt is timestamp);
+    }
+
+    // =========================================================================
+    // DUAL PLATFORM OWNER COLLECTION (STRICT UID BINDING, NO IMPERSONATION)
+    // =========================================================================
+    match /platformOwners/{ownerUid} {
+      allow get: if isValidId(ownerUid) && isApprovedBootstrapOwnerEmail() && (request.auth.uid == ownerUid || isPlatformOwner());
+      allow list: if isPlatformOwner() && existing().role == 'PLATFORM_OWNER';
+
+      // Approved emails can ONLY bootstrap their OWN verified Firebase UID record
+      allow create: if isValidId(ownerUid)
+        && isApprovedBootstrapOwnerEmail()
+        && request.auth.uid == ownerUid
+        && isValidPlatformOwner(incoming(), ownerUid)
+        && incoming().email == request.auth.token.email.lower()
+        && incoming().createdAt == request.time
+        && (!('lastLoginAt' in incoming()) || incoming().lastLoginAt == request.time);
+
+      // Owners may only update their own displayName / lastLoginAt; privilege fields are immutable
+      allow update: if isValidId(ownerUid)
+        && isPlatformOwner()
+        && request.auth.uid == ownerUid
+        && isValidPlatformOwner(incoming(), ownerUid)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'lastLoginAt'])
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().role == existing().role
+        && incoming().status == existing().status
+        && incoming().createdAt == existing().createdAt
+        && (!('lastLoginAt' in incoming()) || incoming().lastLoginAt == request.time);
+
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // USER PROFILES & MEMBERSHIP INDEX
+    // =========================================================================
+    match /users/{uid} {
+      allow get: if isValidId(uid) && isVerifiedGoogleUser() && (request.auth.uid == uid || isPlatformOwner());
+      allow list: if isVerifiedGoogleUser() && existing().uid == request.auth.uid;
+
+      allow create: if isValidId(uid)
+        && isVerifiedGoogleUser()
+        && request.auth.uid == uid
+        && isValidUserProfile(incoming(), uid)
+        && incoming().email == request.auth.token.email.lower()
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(uid)
+        && isVerifiedGoogleUser()
+        && request.auth.uid == uid
+        && isValidUserProfile(incoming(), uid)
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt'])
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().updatedAt == request.time;
+
+      allow delete: if false;
+
+      match /memberships/{institutionId} {
+        allow get: if isValidId(uid) && isValidId(institutionId) && isVerifiedGoogleUser() && (request.auth.uid == uid || isPlatformOwner() || isInstitutionAdmin(institutionId));
+        allow list: if isValidId(uid) && isVerifiedGoogleUser() && request.auth.uid == uid && existing().uid == request.auth.uid;
+
+        allow create: if isValidId(uid)
+          && isValidId(institutionId)
+          && (isPlatformOwner() || isInstitutionAdmin(institutionId))
+          && isValidUserMembership(incoming(), uid, institutionId)
+          && incoming().updatedAt == request.time;
+
+        allow update: if isValidId(uid)
+          && isValidId(institutionId)
+          && (isPlatformOwner() || isInstitutionAdmin(institutionId))
+          && isValidUserMembership(incoming(), uid, institutionId)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['institutionName', 'institutionCode', 'role', 'status', 'updatedAt'])
+          && incoming().uid == existing().uid
+          && incoming().institutionId == existing().institutionId
+          && incoming().updatedAt == request.time;
+
+        allow delete: if isValidId(uid) && isValidId(institutionId) && (isPlatformOwner() || isInstitutionAdmin(institutionId));
+      }
+    }
+
+    // =========================================================================
+    // INSTITUTION TENANT TREE (COMPLETE ISOLATION PER INSTITUTION)
+    // =========================================================================
+    match /institutions/{institutionId} {
+      allow get: if isValidId(institutionId) && (isPlatformOwner() || isInstitutionViewer(institutionId));
+      allow list: if isPlatformOwner() && existing().status in ['ACTIVE', 'SUSPENDED'];
+
+      allow create: if isValidId(institutionId)
+        && isPlatformOwner()
+        && isValidInstitution(incoming(), institutionId)
+        && incoming().createdByUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(institutionId)
+        && (isPlatformOwner() || isInstitutionAdmin(institutionId))
+        && isValidInstitution(incoming(), institutionId)
+        && (
+          (isPlatformOwner() && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'domain', 'status', 'updatedAt'])) ||
+          (isInstitutionAdmin(institutionId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'domain', 'updatedAt']))
+        )
+        && incoming().id == existing().id
+        && incoming().code == existing().code
+        && incoming().createdByUid == existing().createdByUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+
+      allow delete: if false;
+
+      // Institution Settings
+      match /settings/{settingId} {
+        allow get: if isValidId(institutionId) && isValidId(settingId) && (isPlatformOwner() || isInstitutionViewer(institutionId));
+        allow list: if isValidId(institutionId) && (isPlatformOwner() || isInstitutionViewer(institutionId)) && existing().institutionId == institutionId;
+
+        allow create: if isValidId(institutionId)
+          && isValidId(settingId)
+          && (isPlatformOwner() || isInstitutionAdmin(institutionId))
+          && isValidInstitutionSettings(incoming(), institutionId)
+          && incoming().updatedByUid == request.auth.uid
+          && incoming().updatedAt == request.time;
+
+        allow update: if isValidId(institutionId)
+          && isValidId(settingId)
+          && (isPlatformOwner() || isInstitutionAdmin(institutionId))
+          && isValidInstitutionSettings(incoming(), institutionId)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['defaultEmailDomain', 'avatarBaseUrl', 'qrPrefix', 'allowManualOverride', 'requireAuthorizedDevice', 'timezone', 'updatedByUid', 'updatedAt'])
+          && incoming().institutionId == existing().institutionId
+          && incoming().updatedByUid == request.auth.uid
+          && incoming().updatedAt == request.time;
+
+        allow delete: if false;
+      }
+
+      // Institution Members
+      match /members/{memberUid} {
+        allow get: if isValidId(institutionId) && isValidId(memberUid) && (
+          (isVerifiedGoogleUser() && request.auth.uid == memberUid)
+          || isPlatformOwner()
+          || isInstitutionAdmin(institutionId)
+        );
+        allow list: if isValidId(institutionId) && (isPlatformOwner() || isInstitutionAdmin(institutionId)) && existing().institutionId == institutionId;
+
+        allow create: if isValidId(institutionId)
+          && isValidId(memberUid)
+          && (isPlatformOwner() || isInstitutionAdmin(institutionId))
+          && isValidInstitutionMember(incoming(), institutionId, memberUid)
+          && incoming().assignedByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+
+        allow update: if isValidId(institutionId)
+          && isValidId(memberUid)
+          && (isPlatformOwner() || isInstitutionAdmin(institutionId))
+          && isValidInstitutionMember(incoming(), institutionId, memberUid)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'status', 'displayName', 'assignedByUid', 'updatedAt'])
+          && incoming().uid == existing().uid
+          && incoming().institutionId == existing().institutionId
+          && incoming().email == existing().email
+          && incoming().createdAt == existing().createdAt
+          && incoming().assignedByUid == request.auth.uid
+          && incoming().updatedAt == request.time;
+
+        allow delete: if isValidId(institutionId) && isValidId(memberUid) && (isPlatformOwner() || isInstitutionAdmin(institutionId));
+      }
+
+      // Staff Directory (Permanent QR Identity)
+      match /staff/{staffId} {
+        allow get: if isValidId(institutionId) && isValidId(staffId) && isInstitutionViewer(institutionId);
+        allow list: if isValidId(institutionId) && isInstitutionViewer(institutionId) && existing().institutionId == institutionId;
+
+        allow create: if isValidId(institutionId)
+          && isValidId(staffId)
+          && isInstitutionAdmin(institutionId)
+          && isValidStaff(incoming(), institutionId, staffId)
+          && incoming().updatedByUid == request.auth.uid
+          && incoming().updatedAt == request.time;
+
+        allow update: if isValidId(institutionId)
+          && isValidId(staffId)
+          && isInstitutionAdmin(institutionId)
+          && isValidStaff(incoming(), institutionId, staffId)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'department', 'position', 'email', 'phone', 'avatarUrl', 'status', 'updatedByUid', 'updatedAt'])
+          && incoming().id == existing().id
+          && incoming().institutionId == existing().institutionId
+          && incoming().updatedByUid == request.auth.uid
+          && incoming().updatedAt == request.time;
+
+        allow delete: if isValidId(institutionId) && isValidId(staffId) && isInstitutionAdmin(institutionId);
+      }
+
+      // Events
+      match /events/{eventId} {
+        allow get: if isValidId(institutionId) && isValidId(eventId) && isInstitutionViewer(institutionId);
+        allow list: if isValidId(institutionId) && isInstitutionViewer(institutionId) && existing().institutionId == institutionId;
+
+        allow create: if isValidId(institutionId)
+          && isValidId(eventId)
+          && isInstitutionAdmin(institutionId)
+          && isValidEvent(incoming(), institutionId, eventId)
+          && incoming().createdByUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+
+        allow update: if isValidId(institutionId)
+          && isValidId(eventId)
+          && isInstitutionAdmin(institutionId)
+          && isValidEvent(incoming(), institutionId, eventId)
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'date', 'startTime', 'endTime', 'location', 'status', 'description', 'targetCount', 'updatedAt'])
+          && incoming().id == existing().id
+          && incoming().institutionId == existing().institutionId
+          && incoming().createdByUid == existing().createdByUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time;
+
+        allow delete: if isValidId(institutionId) && isValidId(eventId) && isInstitutionAdmin(institutionId);
+      }
+
+      // Attendance Records (Atomic & Duplicate-Proof: {eventId}__{staffId})
+      match /attendanceRecords/{recordId} {
+        allow get: if isValidId(institutionId) && isValidId(recordId) && isInstitutionViewer(institutionId);
+        allow list: if isValidId(institutionId) && isInstitutionViewer(institutionId) && existing().institutionId == institutionId;
+
+        allow create: if isValidId(institutionId)
+          && isValidId(recordId)
+          && isInstitutionOperator(institutionId)
+          && isValidAttendanceRecord(incoming(), institutionId, recordId)
+          && incoming().timestamp == request.time
+          && exists(/databases/$(database)/documents/institutions/$(institutionId)/events/$(incoming().eventId))
+          && get(/databases/$(database)/documents/institutions/$(institutionId)/events/$(incoming().eventId)).data.status == 'OPEN'
+          && exists(/databases/$(database)/documents/institutions/$(institutionId)/staff/$(incoming().staffId))
+          && get(/databases/$(database)/documents/institutions/$(institutionId)/staff/$(incoming().staffId)).data.status == 'ACTIVE'
+          && (
+            incoming().method == 'CAMERA_SCAN' ||
+            incoming().method == 'KIOSK_SCAN' ||
+            isInstitutionAdmin(institutionId)
+          );
+
+        allow update: if false;
+        allow delete: if isValidId(institutionId) && isValidId(recordId) && isInstitutionAdmin(institutionId);
+      }
+
+      // Authorized Scanner Devices
+      match /scannerDevices/{deviceId} {
+        allow get: if isValidId(institutionId) && isValidId(deviceId) && isInstitutionOperator(institutionId);
+        allow list: if isValidId(institutionId) && isInstitutionOperator(institutionId) && existing().institutionId == institutionId;
+
+        allow create: if isValidId(institutionId)
+          && isValidId(deviceId)
+          && isInstitutionAdmin(institutionId)
+          && isValidScannerDevice(incoming(), institutionId, deviceId)
+          && incoming().registeredByUid == request.auth.uid
+          && incoming().createdAt == request.time;
+
+        allow update: if isValidId(institutionId)
+          && isValidId(deviceId)
+          && isValidScannerDevice(incoming(), institutionId, deviceId)
+          && incoming().id == existing().id
+          && incoming().institutionId == existing().institutionId
+          && incoming().registeredByUid == existing().registeredByUid
+          && incoming().createdAt == existing().createdAt
+          && (
+            (isInstitutionAdmin(institutionId) && incoming().diff(existing()).affectedKeys().hasOnly(['label', 'status', 'lastSeenAt'])) ||
+            (isInstitutionOperator(institutionId) && incoming().diff(existing()).affectedKeys().hasOnly(['lastSeenAt']) && incoming().lastSeenAt == request.time)
+          );
+
+        allow delete: if isValidId(institutionId) && isValidId(deviceId) && isInstitutionAdmin(institutionId);
+      }
     }
   }
 }

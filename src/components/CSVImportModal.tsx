@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileSpreadsheet, Upload, Download, CheckCircle2, AlertCircle, RefreshCw, X, FileText } from 'lucide-react';
+import { FileSpreadsheet, Upload, Download, AlertCircle, RefreshCw, X, FileText } from 'lucide-react';
 import { Staff } from '../types';
 import { processStaffCSV, getSampleStaffCSV, CSVImportResult } from '../utils/csvHelper';
 import { soundService } from '../services/soundService';
@@ -7,13 +7,19 @@ import { soundService } from '../services/soundService';
 interface CSVImportModalProps {
   isOpen: boolean;
   onClose: () => void;
+  institutionId: string;
+  defaultEmailDomain?: string;
+  avatarBaseUrl?: string;
   currentStaffList: Staff[];
-  onSyncComplete: (newStaffList: Staff[], summary: { addedCount: number; updatedCount: number }) => void;
+  onSyncComplete: (staffToUpsert: Staff[], summary: { addedCount: number; updatedCount: number }) => Promise<void>;
 }
 
 export const CSVImportModal: React.FC<CSVImportModalProps> = ({
   isOpen,
   onClose,
+  institutionId,
+  defaultEmailDomain,
+  avatarBaseUrl,
   currentStaffList,
   onSyncComplete
 }) => {
@@ -21,8 +27,17 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
   const [csvRawText, setCsvRawText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<CSVImportResult | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   if (!isOpen) return null;
+
+  const parseText = (text: string) => {
+    return processStaffCSV(text, currentStaffList, {
+      institutionId,
+      defaultEmailDomain,
+      avatarBaseUrl
+    });
+  };
 
   // Handle File Upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -35,8 +50,7 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
       const text = evt.target?.result as string;
       if (text) {
         setCsvRawText(text);
-        const res = processStaffCSV(text, currentStaffList);
-        setImportResult(res);
+        setImportResult(parseText(text));
       }
     };
     reader.readAsText(file);
@@ -46,8 +60,7 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
   const handleTextChange = (text: string) => {
     setCsvRawText(text);
     if (text.trim()) {
-      const res = processStaffCSV(text, currentStaffList);
-      setImportResult(res);
+      setImportResult(parseText(text));
     } else {
       setImportResult(null);
     }
@@ -55,7 +68,7 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
 
   // Download Sample Template
   const handleDownloadSample = () => {
-    const sampleText = getSampleStaffCSV();
+    const sampleText = getSampleStaffCSV(defaultEmailDomain);
     const blob = new Blob([sampleText], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -64,27 +77,30 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
-  // Execute Sync
-  const handleConfirmSync = () => {
-    if (!importResult || (importResult.added.length === 0 && importResult.updated.length === 0)) return;
+  // Execute Sync (upserts only added + updated rows, leaving existing unrelated staff untouched)
+  const handleConfirmSync = async () => {
+    if (!importResult || (importResult.added.length === 0 && importResult.updated.length === 0) || isSyncing) {
+      return;
+    }
 
-    // Combine current staff list with updates & additions
-    const staffMap = new Map<string, Staff>();
-    currentStaffList.forEach((s) => staffMap.set(s.id.toUpperCase(), s));
-
-    importResult.updated.forEach((s) => staffMap.set(s.id.toUpperCase(), s));
-    importResult.added.forEach((s) => staffMap.set(s.id.toUpperCase(), s));
-
-    const finalStaffList = Array.from(staffMap.values());
-
-    soundService.playSuccess();
-    onSyncComplete(finalStaffList, {
-      addedCount: importResult.added.length,
-      updatedCount: importResult.updated.length
-    });
-    onClose();
+    const staffToUpsert = [...importResult.updated, ...importResult.added];
+    setIsSyncing(true);
+    try {
+      await onSyncComplete(staffToUpsert, {
+        addedCount: importResult.added.length,
+        updatedCount: importResult.updated.length
+      });
+      soundService.playSuccess();
+      setCsvRawText('');
+      setFileName(null);
+      setImportResult(null);
+      onClose();
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -160,7 +176,8 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
                 {fileName ? `Fail Terpilih: ${fileName}` : 'Klik atau seret fail CSV anda di sini'}
               </p>
               <p className="text-[11px] text-slate-400 mt-1">
-                Format disokong: CSV (Lajur disyorkan: <code className="text-indigo-300">ID Staf, Nama Penuh, Jabatan, Jawatan, Emel, Phone</code>)
+                Format disokong: CSV (Lajur disyorkan:{' '}
+                <code className="text-indigo-300">ID Staf, Nama Penuh, Jabatan, Jawatan, Emel, Phone</code>)
               </p>
             </div>
           ) : (
@@ -269,15 +286,17 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
           </button>
 
           <button
-            onClick={handleConfirmSync}
-            disabled={!importResult || (importResult.added.length === 0 && importResult.updated.length === 0)}
+            onClick={() => {
+              void handleConfirmSync();
+            }}
+            disabled={isSyncing || !importResult || (importResult.added.length === 0 && importResult.updated.length === 0)}
             className={`text-xs font-bold px-5 py-2.5 rounded-xl transition-all shadow-md flex items-center space-x-1.5 cursor-pointer ${
-              importResult && (importResult.added.length > 0 || importResult.updated.length > 0)
+              importResult && (importResult.added.length > 0 || importResult.updated.length > 0) && !isSyncing
                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950/40'
                 : 'bg-slate-800 text-slate-500 cursor-not-allowed'
             }`}
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
             <span>
               Selaraskan Data Sekarang ({importResult ? importResult.added.length + importResult.updated.length : 0} Staf)
             </span>
