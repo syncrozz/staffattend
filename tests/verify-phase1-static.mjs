@@ -63,10 +63,25 @@ test('firestore.rules enforces Default Deny, dual-owner UID binding, immutabilit
 
 test('all OPEN event queries prove institution scope required by the event list rule', () => {
   const openStatusFilterCount = [...attendanceEngine.matchAll(/where\('status',\s*'==',\s*'OPEN'\)/g)].length;
-  const institutionScopeFilterCount = [
-    ...attendanceEngine.matchAll(/where\('institutionId',\s*'==',\s*institutionId\)/g)
+  const tenantScopedOpenQueryCount = [
+    ...attendanceEngine.matchAll(
+      /query\(\s*collection\(db, 'institutions', institutionId, 'events'\),[\s\S]*?where\('status',\s*'==',\s*'OPEN'\),[\s\S]*?where\('institutionId',\s*'==',\s*institutionId\)\s*\)/g
+    )
   ].length;
 
   assert.equal(openStatusFilterCount, 3, 'the attendance engine has three OPEN event queries');
-  assert.equal(institutionScopeFilterCount, openStatusFilterCount);
+  assert.equal(tenantScopedOpenQueryCount, openStatusFilterCount);
+});
+
+test('staff, events, and attendance listeners use tenant-scoped Firestore queries', () => {
+  for (const methodName of ['subscribeStaff', 'subscribeEvents', 'subscribeAttendanceRecords']) {
+    const methodStart = attendanceEngine.indexOf(`public ${methodName}(`);
+    assert.notEqual(methodStart, -1, `${methodName} method must exist`);
+
+    const nextMethodStart = attendanceEngine.indexOf('\n  public ', methodStart + 1);
+    const methodBody = attendanceEngine.slice(methodStart, nextMethodStart === -1 ? undefined : nextMethodStart);
+
+    assert.match(methodBody, /onSnapshot\(\s*query\(/, `${methodName} must subscribe to a constrained query`);
+    assert.match(methodBody, /where\('institutionId',\s*'==',\s*institutionId\)/);
+  }
 });

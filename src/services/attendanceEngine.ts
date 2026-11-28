@@ -78,7 +78,10 @@ class AttendanceEngine {
 
     const path = `institutions/${institutionId}/staff`;
     return onSnapshot(
-      collection(db, 'institutions', institutionId, 'staff'),
+      query(
+        collection(db, 'institutions', institutionId, 'staff'),
+        where('institutionId', '==', institutionId)
+      ),
       (snapshot) => {
         const list: Staff[] = [];
         snapshot.forEach((docSnap) => {
@@ -120,7 +123,10 @@ class AttendanceEngine {
 
     const path = `institutions/${institutionId}/events`;
     return onSnapshot(
-      collection(db, 'institutions', institutionId, 'events'),
+      query(
+        collection(db, 'institutions', institutionId, 'events'),
+        where('institutionId', '==', institutionId)
+      ),
       (snapshot) => {
         const list: EventItem[] = [];
         snapshot.forEach((docSnap) => {
@@ -165,7 +171,10 @@ class AttendanceEngine {
 
     const path = `institutions/${institutionId}/attendanceRecords`;
     return onSnapshot(
-      collection(db, 'institutions', institutionId, 'attendanceRecords'),
+      query(
+        collection(db, 'institutions', institutionId, 'attendanceRecords'),
+        where('institutionId', '==', institutionId)
+      ),
       (snapshot) => {
         const list: AttendanceRecord[] = [];
         snapshot.forEach((docSnap) => {
