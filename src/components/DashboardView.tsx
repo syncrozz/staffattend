@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { EventItem, Staff, AttendanceRecord, ScanResult } from '../types';
-import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK } from '../utils/staffUtils';
+import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK, formatDisplayName } from '../utils/staffUtils';
 
 interface DashboardViewProps {
   activeEvent: EventItem | null;
@@ -296,7 +296,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div className="relative">
                     <img
                       src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
-                      alt={staf.name}
+                      alt={formatDisplayName(staf.name)}
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
                       }}
@@ -310,7 +310,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
                   <div className="overflow-hidden">
                     <div className="text-[11px] font-semibold text-white truncate">
-                      {staf.name.split(' ')[0]} {staf.name.split(' ')[1] || ''}
+                      {formatDisplayName(`${staf.name.split(' ')[0]} ${staf.name.split(' ')[1] || ''}`)}
                     </div>
                     <div className="text-[10px] text-slate-400 font-mono">{staf.id}</div>
                   </div>
@@ -367,7 +367,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 text-xs flex items-center justify-between"
                 >
                   <div className="space-y-0.5">
-                    <div className="font-semibold text-white">{rec.staffName}</div>
+                    <div className="font-semibold text-white">{formatDisplayName(rec.staffName)}</div>
                     <div className="text-[10px] text-slate-400 flex items-center space-x-2">
                       <span className="text-indigo-300 font-mono">{rec.staffId}</span>
                       <span>•</span>

@@ -1,6 +1,11 @@
 export const DEFAULT_AVATAR_FALLBACK =
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250';
 
+/** Formats a person's name for consistent uppercase display without changing stored data. */
+export function formatDisplayName(name: string): string {
+  return name.toUpperCase();
+}
+
 /**
  * Builds the staff avatar URL using the active institution's configured avatarBaseUrl.
  * If no institution avatarBaseUrl is set, returns the safe default fallback image.

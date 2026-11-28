@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { EventItem, Staff, ScanResult, ScanMethod } from '../types';
-import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK } from '../utils/staffUtils';
+import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK, formatDisplayName } from '../utils/staffUtils';
 
 interface ScannerViewProps {
   activeEvent: EventItem | null;
@@ -370,7 +370,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                   >
                     <img
                       src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
-                      alt={staf.name}
+                      alt={formatDisplayName(staf.name)}
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
                       }}
@@ -378,7 +378,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                     />
                     <div className="overflow-hidden">
                       <div className="text-xs font-semibold text-white group-hover:text-indigo-300 transition-colors truncate">
-                        {staf.name}
+                        {formatDisplayName(staf.name)}
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
                         <span className="text-indigo-400 font-bold">{qrPrefix}|{staf.id}</span>
@@ -429,7 +429,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                   <div className="pt-2 flex items-center space-x-3 border-t border-white/10 mt-2">
                     <div className="text-xs">
                       <span className="opacity-70">Nama Staf: </span>
-                      <span className="font-bold">{scanResult.staff.name}</span>
+                      <span className="font-bold">{formatDisplayName(scanResult.staff.name)}</span>
                     </div>
                     <span className="opacity-40">•</span>
                     <div className="text-xs font-mono">

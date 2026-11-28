@@ -3,6 +3,7 @@ import { FileSpreadsheet, Upload, Download, AlertCircle, RefreshCw, X, FileText 
 import { Staff } from '../types';
 import { processStaffCSV, getSampleStaffCSV, CSVImportResult } from '../utils/csvHelper';
 import { soundService } from '../services/soundService';
+import { formatDisplayName } from '../utils/staffUtils';
 
 interface CSVImportModalProps {
   isOpen: boolean;
@@ -249,7 +250,7 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
                               </span>
                             </td>
                             <td className="p-2.5 font-mono font-bold text-emerald-400">{staf.id}</td>
-                            <td className="p-2.5 font-medium">{staf.name}</td>
+                            <td className="p-2.5 font-medium">{formatDisplayName(staf.name)}</td>
                             <td className="p-2.5 text-slate-400">{staf.department}</td>
                             <td className="p-2.5 text-slate-400">{staf.position}</td>
                           </tr>
@@ -262,7 +263,7 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
                               </span>
                             </td>
                             <td className="p-2.5 font-mono font-bold text-blue-400">{staf.id}</td>
-                            <td className="p-2.5 font-medium">{staf.name}</td>
+                            <td className="p-2.5 font-medium">{formatDisplayName(staf.name)}</td>
                             <td className="p-2.5 text-slate-400">{staf.department}</td>
                             <td className="p-2.5 text-slate-400">{staf.position}</td>
                           </tr>

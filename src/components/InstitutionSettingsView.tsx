@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useInstitution } from '../contexts/InstitutionContext';
 import { attendanceEngine } from '../services/attendanceEngine';
 import { InstitutionMember, InstitutionRole, ScannerDevice } from '../types';
+import { formatDisplayName } from '../utils/staffUtils';
 
 export const InstitutionSettingsView: React.FC = () => {
   const { user, isPlatformOwner } = useAuth();
@@ -265,7 +266,7 @@ export const InstitutionSettingsView: React.FC = () => {
             {members.map((m) => (
               <div key={m.uid} className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between gap-2">
                 <div className="overflow-hidden">
-                  <div className="font-bold text-white truncate">{m.displayName}</div>
+                  <div className="font-bold text-white truncate">{formatDisplayName(m.displayName)}</div>
                   <div className="text-[10px] text-slate-400 truncate">{m.email}</div>
                   <div className="text-[10px] font-mono text-indigo-300">{m.role} • {m.status}</div>
                 </div>

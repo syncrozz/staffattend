@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { AttendanceRecord, EventItem, Staff } from '../types';
 import { sanitizeCSVCell } from '../utils/csvHelper';
+import { formatDisplayName } from '../utils/staffUtils';
 
 interface ReportsViewProps {
   attendanceRecords: AttendanceRecord[];
@@ -435,7 +436,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                                 <td className="p-3 pl-5 font-mono font-bold text-indigo-300 print:text-black">
                                   {row.staff.id}
                                 </td>
-                                <td className="p-3 font-semibold text-white print:text-black">{row.staff.name}</td>
+                                <td className="p-3 font-semibold text-white print:text-black">{formatDisplayName(row.staff.name)}</td>
                                 <td className="p-3 text-slate-400 print:text-black">{row.staff.position}</td>
                                 <td className="p-3 text-center">
                                   {row.isAttended ? (
@@ -484,7 +485,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                           <td className="p-3.5 pl-5 font-mono font-bold text-indigo-300 print:text-black">
                             {row.staff.id}
                           </td>
-                          <td className="p-3.5 font-bold text-white print:text-black">{row.staff.name}</td>
+                          <td className="p-3.5 font-bold text-white print:text-black">{formatDisplayName(row.staff.name)}</td>
                           <td className="p-3.5 text-slate-300 print:text-black font-medium">
                             {row.staff.department}
                           </td>
@@ -568,7 +569,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                   filteredAuditRecords.map((rec) => (
                     <tr key={rec.id} className="hover:bg-slate-800/40 transition-colors">
                       <td className="p-3.5 pl-5">
-                        <div className="font-bold text-white">{rec.staffName}</div>
+                        <div className="font-bold text-white">{formatDisplayName(rec.staffName)}</div>
                         <div className="text-[10px] text-indigo-400 font-mono">ID: {rec.staffId}</div>
                       </td>
                       <td className="p-3.5 text-slate-300">{rec.staffDepartment}</td>

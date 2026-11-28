@@ -28,6 +28,7 @@ import {
   ScannerDevice,
   InstitutionMember
 } from '../types';
+import { formatDisplayName } from '../utils/staffUtils';
 import { soundService } from './soundService';
 
 class AttendanceEngine {
@@ -504,7 +505,7 @@ class AttendanceEngine {
           return {
             status: 'STAFF_INACTIVE',
             title: '✕ STAF TIDAK AKTIF',
-            message: `Status staf ${staffData.name} (${staffId}) adalah INACTIVE.`,
+            message: `Status staf ${formatDisplayName(staffData.name)} (${staffId}) adalah INACTIVE.`,
             staff: staffData
           };
         }
@@ -539,7 +540,7 @@ class AttendanceEngine {
           return {
             status: 'DUPLICATE',
             title: '⚠ SUDAH DIREKOD',
-            message: `Kehadiran ${staffData.name} bagi "${eventData.name}" telahpun direkodkan sebelum ini.`,
+            message: `Kehadiran ${formatDisplayName(staffData.name)} bagi "${eventData.name}" telahpun direkodkan sebelum ini.`,
             staff: staffData,
             event: eventData,
             existingRecord
@@ -567,7 +568,7 @@ class AttendanceEngine {
         return {
           status: 'SUCCESS',
           title: '✓ KEHADIRAN DIREKOD',
-          message: `Kehadiran berjaya direkodkan dan disahkan oleh pelayan untuk ${staffData.name}.`,
+          message: `Kehadiran berjaya direkodkan dan disahkan oleh pelayan untuk ${formatDisplayName(staffData.name)}.`,
           staff: staffData,
           event: eventData,
           timestamp: formattedTime

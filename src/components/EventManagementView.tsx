@@ -9,6 +9,7 @@ import {
   Eye
 } from 'lucide-react';
 import { EventItem, EventStatus, EventCategory, AttendanceRecord } from '../types';
+import { formatDisplayName } from '../utils/staffUtils';
 
 interface EventManagementViewProps {
   events: EventItem[];
@@ -457,7 +458,7 @@ export const EventManagementView: React.FC<EventManagementViewProps> = ({
                       className="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 text-xs flex justify-between items-center"
                     >
                       <div>
-                        <div className="font-semibold text-white">{rec.staffName}</div>
+                        <div className="font-semibold text-white">{formatDisplayName(rec.staffName)}</div>
                         <div className="text-[10px] text-slate-400 font-mono">
                           {rec.staffId} • {rec.staffDepartment}
                         </div>

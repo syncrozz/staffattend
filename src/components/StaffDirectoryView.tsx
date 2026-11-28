@@ -15,7 +15,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { Staff, ScanResult } from '../types';
 import { exportStaffToCSV } from '../utils/csvHelper';
-import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK } from '../utils/staffUtils';
+import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK, formatDisplayName } from '../utils/staffUtils';
 
 interface StaffDirectoryViewProps {
   staffList: Staff[];
@@ -165,7 +165,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
       return;
     }
 
-    const staffName = escapeHtml(selectedStaffForQR.name);
+    const staffName = escapeHtml(formatDisplayName(selectedStaffForQR.name));
     const staffId = escapeHtml(selectedStaffForQR.id);
     const staffPosition = escapeHtml(selectedStaffForQR.position || 'Staf');
     const staffDepartment = escapeHtml(selectedStaffForQR.department || '');
@@ -350,7 +350,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
                 <div className="flex items-center space-x-3">
                   <img
                     src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
-                    alt={staf.name}
+                    alt={formatDisplayName(staf.name)}
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
                     }}
@@ -360,8 +360,8 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
                     <span className="bg-indigo-500/20 text-indigo-300 font-mono font-bold text-[10px] px-2 py-0.5 rounded border border-indigo-500/30">
                       {staf.id}
                     </span>
-                    <h3 className="font-bold text-white text-xs sm:text-sm mt-1 truncate" title={staf.name}>
-                      {staf.name}
+                    <h3 className="font-bold text-white text-xs sm:text-sm mt-1 truncate" title={formatDisplayName(staf.name)}>
+                      {formatDisplayName(staf.name)}
                     </h3>
                     <p className="text-[11px] text-slate-400 truncate">{staf.position}</p>
                   </div>
@@ -406,7 +406,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
                   <button
                     id={`staff-card-delete-btn-${staf.id}`}
                     onClick={() => {
-                      if (window.confirm(`Padam staf ${staf.name} (${staf.id})?`)) {
+                      if (window.confirm(`Padam staf ${formatDisplayName(staf.name)} (${staf.id})?`)) {
                         void onDeleteStaff(staf.id);
                       }
                     }}
@@ -543,7 +543,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
                   {cleanPrefix}|{selectedStaffForQR.id}
                 </div>
                 <h4 className="font-extrabold text-sm text-slate-900 pt-1">
-                  {selectedStaffForQR.name}
+                  {formatDisplayName(selectedStaffForQR.name)}
                 </h4>
                 <p className="text-xs text-slate-600 font-medium">{selectedStaffForQR.position}</p>
                 <p className="text-[11px] text-slate-500">{selectedStaffForQR.department}</p>
