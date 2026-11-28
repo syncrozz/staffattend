@@ -43,6 +43,19 @@ function getNextSuggestedStaffId(list: Staff[]): string {
   return `ST${String(maxNum + 1).padStart(3, '0')}`;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    };
+    return entities[character];
+  });
+}
+
 export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
   staffList,
   institutionId,
@@ -141,7 +154,93 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
   };
 
   const handlePrintQRCard = () => {
-    window.print();
+    if (!selectedStaffForQR) return;
+
+    const qrSvg = document.querySelector('#staff-qr-preview-code svg');
+    if (!qrSvg) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      window.alert('Pelayar menyekat tetingkap cetak. Benarkan pop-up untuk laman StaffAttend dan cuba semula.');
+      return;
+    }
+
+    const staffName = escapeHtml(selectedStaffForQR.name);
+    const staffId = escapeHtml(selectedStaffForQR.id);
+    const staffPosition = escapeHtml(selectedStaffForQR.position || 'Staf');
+    const staffDepartment = escapeHtml(selectedStaffForQR.department || '');
+    const qrValue = escapeHtml(`${cleanPrefix}|${selectedStaffForQR.id}`);
+
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html>
+      <html lang="ms">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Kad QR ${staffId}</title>
+          <style>
+            @page { size: A4 portrait; margin: 0; }
+            * { box-sizing: border-box; }
+            html, body { width: 210mm; height: 297mm; margin: 0; padding: 0; }
+            body {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: #fff;
+              color: #111827;
+              font-family: Arial, Helvetica, sans-serif;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .card {
+              display: flex;
+              align-items: center;
+              gap: 4mm;
+              width: 85.6mm;
+              height: 54mm;
+              padding: 4mm;
+              overflow: hidden;
+              border: 0.35mm solid #334155;
+              border-radius: 3mm;
+              background: #fff;
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+            .qr { flex: 0 0 32mm; width: 32mm; height: 32mm; }
+            .qr svg { display: block; width: 100%; height: 100%; }
+            .details { min-width: 0; flex: 1; }
+            .label { margin: 0 0 2mm; color: #4f46e5; font-size: 6.5pt; font-weight: 700; letter-spacing: .6pt; }
+            .id { margin: 0 0 2mm; color: #4338ca; font-family: monospace; font-size: 8pt; font-weight: 700; overflow-wrap: anywhere; }
+            .name { margin: 0 0 1mm; font-size: 10pt; line-height: 1.15; font-weight: 700; overflow-wrap: anywhere; }
+            .position { margin: 0 0 1mm; color: #475569; font-size: 7.5pt; }
+            .department { margin: 0; color: #64748b; font-size: 7pt; line-height: 1.15; overflow-wrap: anywhere; }
+            @media screen {
+              body { width: 100%; min-height: 100vh; height: 100vh; }
+              .card { box-shadow: 0 4px 20px #0002; }
+            }
+          </style>
+        </head>
+        <body>
+          <article class="card" aria-label="Kad QR staf ${staffName}">
+            <div class="qr">${qrSvg.outerHTML}</div>
+            <div class="details">
+              <p class="label">STAFFATTEND · QR KEHADIRAN</p>
+              <p class="id">${qrValue}</p>
+              <h1 class="name">${staffName}</h1>
+              <p class="position">${staffPosition}</p>
+              <p class="department">${staffDepartment}</p>
+            </div>
+          </article>
+          <script>
+            window.addEventListener('load', () => {
+              window.focus();
+              window.print();
+            });
+            window.addEventListener('afterprint', () => window.close());
+          </script>
+        </body>
+      </html>`);
+    printWindow.document.close();
   };
 
   const cleanPrefix = (qrPrefix || 'STAFF').toUpperCase();
@@ -428,7 +527,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
               </div>
 
               {/* QR Code SVG */}
-              <div className="p-3 bg-slate-50 inline-block rounded-xl border border-slate-200">
+              <div id="staff-qr-preview-code" className="p-3 bg-slate-50 inline-block rounded-xl border border-slate-200">
                 <QRCodeSVG
                   value={`${cleanPrefix}|${selectedStaffForQR.id}`}
                   size={160}
