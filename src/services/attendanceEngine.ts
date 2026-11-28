@@ -338,7 +338,11 @@ class AttendanceEngine {
       const batch = writeBatch(db);
       if (newEventData.status === 'OPEN') {
         const openSnap = await getDocs(
-          query(collection(db, 'institutions', institutionId, 'events'), where('status', '==', 'OPEN'))
+          query(
+            collection(db, 'institutions', institutionId, 'events'),
+            where('status', '==', 'OPEN'),
+            where('institutionId', '==', institutionId)
+          )
         );
         openSnap.forEach((docSnap) => {
           batch.update(docSnap.ref, {
@@ -373,7 +377,11 @@ class AttendanceEngine {
       const batch = writeBatch(db);
       if (newStatus === 'OPEN') {
         const openSnap = await getDocs(
-          query(collection(db, 'institutions', institutionId, 'events'), where('status', '==', 'OPEN'))
+          query(
+            collection(db, 'institutions', institutionId, 'events'),
+            where('status', '==', 'OPEN'),
+            where('institutionId', '==', institutionId)
+          )
         );
         openSnap.forEach((docSnap) => {
           if (docSnap.id !== eventId) {
@@ -433,7 +441,11 @@ class AttendanceEngine {
       let targetEventId = activeEventId;
       if (!targetEventId) {
         const openSnap = await getDocs(
-          query(collection(db, 'institutions', institutionId, 'events'), where('status', '==', 'OPEN'))
+          query(
+            collection(db, 'institutions', institutionId, 'events'),
+            where('status', '==', 'OPEN'),
+            where('institutionId', '==', institutionId)
+          )
         );
         if (!openSnap.empty) {
           targetEventId = openSnap.docs[0].id;

@@ -22,7 +22,19 @@ try {
   process.exit(1);
 }
 
-const { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } = await import('firebase/firestore');
+const {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch
+} = await import('firebase/firestore');
 
 const PROJECT_ID = 'syncrozzstaffattend';
 const OWNER_1_UID = 'uid_owner_khaikerr_001';
@@ -347,4 +359,78 @@ test('5. Strict multi-institution tenant isolation (Inst A cannot access Inst B)
 
   const checkName = assert.ok;
   checkName(true);
+});
+
+test('6. Institution admin can create an OPEN event after tenant-scoped query and atomic close/create batch', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const adminDb = ctx.firestore();
+    await setDoc(doc(adminDb, 'institutions', 'kpmbp'), {
+      id: 'kpmbp',
+      name: 'KPMBP',
+      code: 'KPMBP',
+      status: 'ACTIVE',
+      createdByUid: OWNER_1_UID,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await setDoc(doc(adminDb, 'institutions', 'kpmbp', 'members', INST_A_ADMIN_UID), {
+      uid: INST_A_ADMIN_UID,
+      institutionId: 'kpmbp',
+      email: 'admin.a@inst.edu.my',
+      displayName: 'Admin A',
+      role: 'INSTITUTION_ADMIN',
+      status: 'ACTIVE',
+      assignedByUid: OWNER_1_UID,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+    await setDoc(doc(adminDb, 'institutions', 'kpmbp', 'events', 'EVT-OLD'), {
+      id: 'EVT-OLD',
+      institutionId: 'kpmbp',
+      name: 'Event Lama',
+      category: 'Mesyuarat',
+      date: '2026-11-27',
+      startTime: '09:00',
+      endTime: '12:00',
+      location: 'Dewan Utama',
+      status: 'OPEN',
+      createdByUid: INST_A_ADMIN_UID,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+  });
+
+  const adminDb = testEnv
+    .authenticatedContext(INST_A_ADMIN_UID, googleAuth(INST_A_ADMIN_UID, 'admin.a@inst.edu.my'))
+    .firestore();
+  const events = collection(adminDb, 'institutions', 'kpmbp', 'events');
+
+  // Rules are not filters: without the document tenant constraint, Firestore rejects the query.
+  await assertFails(getDocs(query(events, where('status', '==', 'OPEN'))));
+
+  const openEvents = await assertSucceeds(
+    getDocs(query(events, where('status', '==', 'OPEN'), where('institutionId', '==', 'kpmbp')))
+  );
+  const batch = writeBatch(adminDb);
+  openEvents.forEach((eventDoc) => {
+    batch.update(eventDoc.ref, { status: 'CLOSED', updatedAt: serverTimestamp() });
+  });
+  batch.set(doc(events, 'EVT-NEW'), {
+    id: 'EVT-NEW',
+    institutionId: 'kpmbp',
+    name: 'Event Baharu',
+    category: 'Mesyuarat',
+    date: '2026-11-28',
+    startTime: '09:00',
+    endTime: '12:00',
+    location: 'Dewan Utama',
+    status: 'OPEN',
+    description: '',
+    targetCount: 20,
+    createdByUid: INST_A_ADMIN_UID,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+
+  await assertSucceeds(batch.commit());
 });

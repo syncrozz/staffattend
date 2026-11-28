@@ -14,6 +14,7 @@ const firebaserc = JSON.parse(fs.readFileSync('.firebaserc', 'utf8'));
 const firebaseJson = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
 const appletConfig = JSON.parse(fs.readFileSync('firebase-applet-config.json', 'utf8'));
 const rules = fs.readFileSync('firestore.rules', 'utf8');
+const attendanceEngine = fs.readFileSync('src/services/attendanceEngine.ts', 'utf8');
 
 test('Firebase CLI target is explicitly pinned to syncrozzstaffattend and never syncrozz2', () => {
   assert.equal(firebaserc.projects?.default, 'syncrozzstaffattend');
@@ -58,4 +59,14 @@ test('firestore.rules enforces Default Deny, dual-owner UID binding, immutabilit
   assert.match(rules, /recordId == \(data\.eventId \+ '__' \+ data\.staffId\)/);
   assert.match(rules, /status == 'OPEN'/);
   assert.match(rules, /status == 'ACTIVE'/);
+});
+
+test('all OPEN event queries prove institution scope required by the event list rule', () => {
+  const openStatusFilterCount = [...attendanceEngine.matchAll(/where\('status',\s*'==',\s*'OPEN'\)/g)].length;
+  const institutionScopeFilterCount = [
+    ...attendanceEngine.matchAll(/where\('institutionId',\s*'==',\s*institutionId\)/g)
+  ].length;
+
+  assert.equal(openStatusFilterCount, 3, 'the attendance engine has three OPEN event queries');
+  assert.equal(institutionScopeFilterCount, openStatusFilterCount);
 });
