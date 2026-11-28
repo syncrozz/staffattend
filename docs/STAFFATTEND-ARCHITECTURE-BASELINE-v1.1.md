@@ -438,3 +438,141 @@ The creator chooses the scope when generating the link. A link for one instance 
 **No automatic report access for ordinary users.**  
 **Temporary bearer link = read-only access to one Session Instance or one Session Series for 24 hours.**  
 **The link grants no other STAFFATTEND permissions.**
+
+
+---
+
+## 20. Final reconciliation — approved product-owner decisions
+
+This section records the final decisions supplied for GitHub Issue #1. It clarifies and supersedes any conflicting internal-report, temporary-link, absence-policy or plan wording in earlier sections. It is still an architecture and implementation plan; application changes require explicit approval after this reconciliation.
+
+### 20.1 Internal report access
+
+- Only the Session Owner, an authorized Department Manager for the owning department, and an Operator actively authorized for that specific Session Instance may read its complete internal attendance register.
+- Ordinary institution users and ordinary staff have no automatic report access.
+- Audience membership or attendance eligibility does not grant report access.
+- Do not provide broad department-wide register access by default. This final decision narrows the general department/user Session Access wording in Section 8.
+- Institution Admin access to department-owned reports remains controlled by post-session sharing. For institution-owned sessions, the institution-level owner policy applies.
+- A Series does not grant inherited access. Each included instance is authorized independently.
+
+### 20.2 Temporary report-link policy
+
+- Eligible link creators are authorized Session Owners and Department Managers acting for a department-owned instance/series. An Operator who is not also an authorized owner or Department Manager cannot create a link.
+- Supported scopes are one Session Instance or one Session Series.
+- A Series link freezes its authorized instance set when generated. Later instances are excluded. At each request the backend rechecks creator authority and returns only frozen instances the creator remains authorized to share.
+- The creator must have a valid Firebase Auth account and current relevant institution/department authority at every report request. Disabled accounts, lost institution membership, revoked manager assignments, or changed instance ownership remove access. If current authority is lost for every frozen instance, reject the Series link.
+- The Session Owner can revoke any link covering their instance/scope, including one created by a Department Manager. The creator may also revoke their own link. Revocation is one-way and immediate for subsequent requests.
+- For a Series link spanning several instance owners, a current owner of any included instance may revoke the whole link. This intentionally favors revocation safety; it may interrupt sharing for the other included instances.
+- Links are bearer credentials, available without recipient login, read-only, and valid until exactly 24 hours after server-side generation. Expiry is calculated from a trusted server time and requests are denied when now is greater than or equal to expiresAt. Cleanup/TTL is not an authorization check.
+- A report link exposes no application login, scanning, attendance editing, session management or access to other data. OPEN reports reflect the latest records; CLOSED reports reflect their final record set.
+- Owners must see a clear sharing warning before generating a link. Link generation does not allow later scope expansion or extend an existing link's expiry.
+
+### 20.3 Temporary-link data and endpoint security
+
+Use a server-only collection at reportShareLinks/{sha256Token}. The document ID is the SHA-256 hash of a cryptographically random 256-bit bearer token. Store no raw token. Store a separate nonsecret link ID for UI/audit reference, plus institutionId, creatorUid, scopeType, scopeId, createdAt, expiresAt, revokedAt/status and fixed filters. Store the frozen Series instance set in a child collection at reportShareLinks/{sha256Token}/allowedInstances/{instanceId} so it is not constrained by one document's size. For a Single Instance link, the frozen set has only the selected instance. Firestore client Rules remain closed to this collection; only trusted backend code can read/write it.
+
+Use a public HTTPS callable/endpoint for report retrieval, requiring no recipient Firebase login. The endpoint must:
+1. Accept the token only in an HTTPS request body, hash it and look up the link.
+2. Reject unknown, revoked, expired, disabled-creator, inactive-institution, wrong-scope or unauthorized-creator links on every request.
+3. Recheck current creator account state using Firebase Auth Admin and current relevant membership/manager/ownership documents. Fail closed if those checks cannot be completed.
+4. Restrict every report query to the frozen instance IDs and the same institution.
+5. Return a minimal read-only report DTO; never expose QR identifiers, unrelated records, email/phone or generic Firestore access.
+6. Return generic denial errors that do not disclose whether a token exists or why it failed.
+7. Set no-store response headers; avoid CDN/service-worker caching of report data.
+
+Prefer a link route such as /r/#<bearer-token> so the bearer is in the URL fragment and is not sent in the route request or referrer. The hosted SPA route is /r/; the report endpoint receives the token in POST body. Do not put the bearer in query strings, request paths, analytics, logs, error reports or audit records. The existing Firebase Analytics bootstrap and service worker require explicit review before implementing this route.
+
+A revoked/expired link is denied on every future API request. Revocation cannot remove data already viewed, printed, downloaded or copied by a recipient; the creator warning must state this limitation.
+
+### 20.4 Revocation, audit and rate limiting
+
+- Audit only link generation and revocation, including actorUid, action, scope, institutionId, server timestamp and nonsecret link ID. Do not audit each anonymous view. Do not store raw token or token hash in audit metadata.
+- Show link metadata to authorized owners/managers and let the original creator or eligible Session Owner revoke. Listing metadata never reveals the bearer token.
+- Start with a simple backend-enforced fixed-window limiter scoped by link and a privacy-preserving request key, plus response/page-size limits and basic function/read/write usage monitoring. Do not add Redis, API Gateway, Cloud Armor or other infrastructure unless observed use justifies it.
+- Metrics must aggregate successful/denied calls, scope type, request counts and read volume without token, email, UID or raw IP labels. Do not cache reports because expiry, revocation and live attendance must take effect immediately.
+
+### 20.5 Revised data and authorization model
+
+Keep the additive domain model from earlier sections:
+- Institution slug registry separate from institution document IDs.
+- Department Registry and multi-department staff membership; retain Staff.department during migration.
+- Department Manager assignments scoped to departments.
+- Optional Session Series and independent Session Instances retained under the existing events path.
+- Per-instance owner, audience, lifecycle timestamps and a participant eligibility snapshot created at activation.
+- New attendance records under the instance's attendanceRecords subcollection; keep old flat attendanceRecords unchanged and readable under an explicit legacy policy.
+- Instance-scoped audit log, access state and scanner bindings.
+
+For matrix cells, use the instance participant snapshot:
+- Eligible + record = PRESENT.
+- Eligible + no record while OPEN = OPEN_EMPTY.
+- Eligible + no record while CLOSED = ABSENT (approved policy).
+- Not eligible = NOT_ELIGIBLE.
+- Historical instance without a reliable snapshot = eligibility unavailable; never infer ABSENT from current roster data.
+
+The Series report is a derived matrix: each column is one instance, and each cell joins that instance's participant snapshot with its independent record. A report link contains only its Single Instance scope or its frozen authorized Series instance set. An instance link cannot expose siblings.
+
+### 20.6 Hosting finding
+
+Repository evidence does not establish the production hosting platform or deployed route rewrites:
+- firebase.json specifies Firestore Rules only; it has no Hosting target or rewrites.
+- package.json has Vite dev/build/preview/lint scripts but no production deploy script.
+- README.md is an AI Studio starter readme; it does not document the production host.
+- No tracked Vercel/Netlify/GitHub Pages hosting configuration or deploy workflow was found.
+- The connected Vercel account returned no project linked to syncrozz/staffattend. That does not exclude a different hosting provider/account.
+
+Therefore direct route support for /kpmbp and /r/ is **not verified**. Do not claim support based on Vite development-server fallback or the live domain name. Before route implementation/release, identify the hosting provider/project and inspect its SPA fallback/rewrite configuration; then test direct HTTP navigation to both routes. Required input is the hosting provider/project (or access to its deployment configuration). No hosting config was changed in this reconciliation.
+
+### 20.7 Operation-by-operation trusted-backend boundary
+
+- Slug lookup: direct minimal mapping read with Rules; slug is not authorization.
+- Slug claim/change: client transaction and Rules can enforce unique document-ID claim, admin authority and atomic old/new mapping. Backend only if those invariants cannot be proved in emulator.
+- Department CRUD and staff-department relationships: client writes with Rules and atomic audit.
+- Department Manager email resolution: callable using Admin Auth to verify real UID/account; low-volume.
+- Series/draft-instance changes: client writes with owner/manager Rules and audit.
+- Instance activation: callable creates complete server-authoritative participant snapshot, then OPEN state and audit. Work is proportional to eligible staff.
+- Instance close/share transition: Rules-guarded atomic write with server time and audit; closed status rejects later scans.
+- Device enrollment/binding and scan: trusted backend validates active operator, approved device proof, explicit binding, institution/session status, snapshot eligibility and duplicate in a transaction. Device ID alone is not a credential.
+- Internal register reads: direct instance-scoped Firestore reads with Rules; no institution-wide record listener.
+- Temporary link create/list/revoke/fetch: trusted backend; anonymous fetch does not expose Firestore directly.
+
+Function costs include invocations, compute, Auth Admin lookup for creator validity, Firestore reads for authorization and report records, and rate-limit reads/writes. Series report cost grows with frozen instance count and returned rows. Use pagination/limits and basic metrics; no numeric cost estimate is possible until expected session sizes and report traffic are known.
+
+### 20.8 Final phased implementation plan
+
+Each task is a separate reviewable commit, writes tests first, and includes matching Rules enforcement before the feature is considered complete.
+
+| Phase | Dependencies and work | Main files likely affected | Exit/test gate |
+|---|---|---|---|
+| 0 — Architecture and hosting prerequisites | This reconciliation; identify hosting provider/rewrite configuration before direct routes. Confirm no code begins without approval. | This document; GitHub Issue #1 | Owner approves final plan; host evidence recorded or remains an explicit release blocker. |
+| 1 — Institution and department foundation | Slug route/context first; then Department Registry, staff relationship model, secure manager appointment and narrowly scoped Functions foundation. | src/main.tsx, src/App.tsx, src/contexts/InstitutionContext.tsx, src/contexts/AuthContext.tsx, src/types.ts, src/components/InstitutionSettingsView.tsx, src/components/PlatformAdminView.tsx, new department/resolver services, new functions department module, firebase.json only if later approved | URL wins over localStorage; suspended/foreign tenant denied; UID/email identity verified; multi-department edges and legacy Staff.department covered. |
+| 2 — Series and Session Instances | Depends on institution/department model. Add series, instance owner/audience/access, lifecycle and audience snapshots; allow concurrent OPEN sessions and prohibit reopening CLOSED. | src/types.ts, src/App.tsx, src/services/attendanceEngine.ts, src/components/EventManagementView.tsx, focused series/session components, functions session-activation module, firestore.rules | Lifecycle/ownership Rules pass emulator; snapshot matches active eligible staff; historical event fields remain readable. |
+| 3 — Device and attendance | Depends on Phase 2 snapshots and lifecycle. Explicit device selection/binding; trusted scan endpoint and duplicate-safe transaction. | src/components/ScannerView.tsx, src/App.tsx, src/services/attendanceEngine.ts, src/types.ts, functions scanner module, firestore.rules | No scan without explicit active binding; ineligible, closed, revoked and cross-tenant scans denied; duplicate and concurrent scans remain safe. |
+| 4 — Internal access and post-session sharing | Depends on ownership, access grants and records. Remove global record subscription; enforce owner/manager/active-operator register access and Institution Admin post-close sharing. | src/App.tsx, src/components/DashboardView.tsx, src/components/EventManagementView.tsx, src/components/ReportsView.tsx, src/components/SidebarNav.tsx, src/services/attendanceEngine.ts, firestore.rules | Rules emulator proves no ordinary access, complete-register access for each authorized role, and immediate sharing/revoke semantics. |
+| 5 — Matrix and temporary report sharing | Depends on instance snapshots/access and report adapter. Build the matrix plus link creation, management, public route, endpoint, hash-only token storage, exact expiry and limiter. | src/main.tsx, src/App.tsx, new src/components/TemporaryReportView.tsx, src/components/ReportsView.tsx or new matrix component, new reporting/share services, public/sw.js, src/services/firebase.ts analytics gating, functions report-sharing module | Tests prove fixed scope, no-login read-only behavior, creator account/role invalidation, owner/creator revocation, 24-hour boundary, no token leakage/cache, access costs limited by pagination, matrix/export correctness. |
+| 6 — Security, migration and release verification | Depends on all feature schemas. Add final indexes, dry-run migration/reporting and rollback procedure; harden queries and legacy fallbacks. No production migration/deploy in this phase without separate approval. | firestore.rules, firestore.indexes.json, scripts/migration tooling, tests/**, functions/**, firebase.json only if approved | Full lint/build, unit/function suites and Firestore emulator. Historical records/QR preserved; no inferred historical absence or new historical access. |
+
+Security Rules and tests are part of each phase, not deferred to Phase 6. The file list is a planning estimate and must be refined before each implementation commit.
+
+### 20.9 Required test gates
+
+- Slug uniqueness, active/suspended status, URL precedence over localStorage, membership required and cross-tenant denial.
+- Multiple department membership, manager appointment identity, manager scope and revocation.
+- Session Series cannot cross institutions; each instance retains a distinct record set.
+- Multiple OPEN instances, valid DRAFT→OPEN→CLOSED transitions, no reopen, server timestamps.
+- Snapshot correctness for staff in one or multiple audience departments; later roster changes do not change old eligibility.
+- No ordinary user/staff report access; owner, assigned Department Manager and actively authorized Operator see the entire internal register only for the correct instance.
+- Institution Admin cannot read private department-owned OPEN records; post-close share/revoke immediately changes access.
+- Device binding, multiple devices per instance, explicit selection, closed-session rejection and duplicate/concurrent scan protection.
+- Series matrix ordering, same-date disambiguation, per-instance eligibility, OPEN_EMPTY, CLOSED ABSENT and historical eligibility-unavailable behavior; CSV/print totals match.
+- Link generation permitted only for authorized owner/manager; Series allowlist freezes at creation; Single Instance never returns siblings.
+- Link retrieval without recipient login is read-only; no Firestore anonymous access or alternate endpoint expansion.
+- 256-bit token, hash-only storage, token never in logs/analytics/audit; invalid, revoked, expired and tampered tokens fail.
+- Exact expiry boundary, including unused link; creator disabled/authorization revoked fails; creator and Session Owner revocation succeed as specified.
+- Rate limit activates; report pages are bounded; no per-view audit; metrics exclude identifiers/secrets.
+- Historical records remain readable under legacy policy; no inferred absence without snapshot and no silent new access.
+
+### 20.10 Migration, rollback and remaining prerequisite
+
+Use additive, idempotent dry-run migration for department mappings only after review. Do not rewrite flat attendance records or infer past ownership/audience/sharing. Historical sessions without snapshots show recorded presence and unknown eligibility for missing records. Preserve QR identifiers and membership. Rollback means restore the previous Rules/application release and disable new callable paths; retain old records and token metadata until any applicable link expires or is revoked.
+
+The sole external prerequisite currently unverified is the hosting provider/project and its /kpmbp and /r/ fallback rules. No remaining product-policy question is required to start implementation once the user explicitly approves it; hosting evidence is required before implementing/releasing direct SPA routes.
