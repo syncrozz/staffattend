@@ -15,6 +15,7 @@ const firebaseJson = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
 const appletConfig = JSON.parse(fs.readFileSync('firebase-applet-config.json', 'utf8'));
 const rules = fs.readFileSync('firestore.rules', 'utf8');
 const attendanceEngine = fs.readFileSync('src/services/attendanceEngine.ts', 'utf8');
+const institutionContext = fs.readFileSync('src/contexts/InstitutionContext.tsx', 'utf8');
 
 test('Firebase CLI target is explicitly pinned to syncrozzstaffattend and never syncrozz2', () => {
   assert.equal(firebaserc.projects?.default, 'syncrozzstaffattend');
@@ -84,4 +85,23 @@ test('staff, events, and attendance listeners use tenant-scoped Firestore querie
     assert.match(methodBody, /onSnapshot\(\s*query\(/, `${methodName} must subscribe to a constrained query`);
     assert.match(methodBody, /where\('institutionId',\s*'==',\s*institutionId\)/);
   }
+});
+
+test('platform owner institution listener matches the allowed status list rule', () => {
+  assert.match(
+    institutionContext,
+    /onSnapshot\(\s*query\(\s*collection\(db, 'institutions'\),\s*where\('status',\s*'in',\s*\['ACTIVE',\s*'SUSPENDED'\]\)\s*\)/
+  );
+});
+
+test('createInstitution rejects an existing institution before writing its batch', () => {
+  const createStart = institutionContext.indexOf('const createInstitution = useCallback(');
+  const toggleStart = institutionContext.indexOf('const toggleInstitutionStatus = useCallback(', createStart);
+  const createBody = institutionContext.slice(createStart, toggleStart);
+  const existingCheck = createBody.indexOf('await getDoc(instRef)');
+  const batchWrite = createBody.indexOf('batch.set(instRef');
+
+  assert.notEqual(existingCheck, -1, 'createInstitution must check whether the institution document exists');
+  assert.ok(batchWrite > existingCheck, 'the duplicate check must happen before the institution write');
+  assert.match(createBody, /instSnap\.exists\(\)/);
 });

@@ -4,8 +4,10 @@ import {
   doc,
   getDoc,
   onSnapshot,
+  query,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
   serverTimestamp
 } from 'firebase/firestore';
@@ -76,7 +78,7 @@ export const InstitutionProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
 
     const unsub = onSnapshot(
-      collection(db, 'institutions'),
+      query(collection(db, 'institutions'), where('status', 'in', ['ACTIVE', 'SUSPENDED'])),
       (snap) => {
         const list: Institution[] = [];
         snap.forEach((docSnap) => {
@@ -267,8 +269,16 @@ export const InstitutionProvider: React.FC<{ children: React.ReactNode }> = ({ c
         throw new Error('Kod institusi mestilah sekurang-kurangnya 2 aksara alfanumerik.');
       }
 
-      const batch = writeBatch(db);
       const instRef = doc(db, 'institutions', instId);
+      const instSnap = await getDoc(instRef);
+      if (instSnap.exists()) {
+        const existingStatus = instSnap.data().status || 'UNKNOWN';
+        throw new Error(
+          `Institusi dengan kod "${cleanCode}" sudah wujud (status: ${existingStatus}). Pilih institusi sedia ada untuk mengurus statusnya.`
+        );
+      }
+
+      const batch = writeBatch(db);
       const settingsRef = doc(db, 'institutions', instId, 'settings', 'general');
       const memberRef = doc(db, 'institutions', instId, 'members', user.uid);
       const userMembershipRef = doc(db, 'users', user.uid, 'memberships', instId);
