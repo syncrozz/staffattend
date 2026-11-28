@@ -194,11 +194,13 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
             }
             .card {
               display: flex;
+              flex-direction: column;
               align-items: center;
-              gap: 4mm;
-              width: 85.6mm;
-              height: 54mm;
-              padding: 4mm;
+              justify-content: center;
+              gap: 2.5mm;
+              width: 54mm;
+              height: 85.6mm;
+              padding: 3.5mm;
               overflow: hidden;
               border: 0.35mm solid #334155;
               border-radius: 3mm;
@@ -206,11 +208,11 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
               break-inside: avoid;
               page-break-inside: avoid;
             }
-            .qr { flex: 0 0 32mm; width: 32mm; height: 32mm; }
+            .qr { flex: 0 0 31mm; width: 31mm; height: 31mm; }
             .qr svg { display: block; width: 100%; height: 100%; }
-            .details { min-width: 0; flex: 1; }
-            .label { margin: 0 0 2mm; color: #4f46e5; font-size: 6.5pt; font-weight: 700; letter-spacing: .6pt; }
-            .id { margin: 0 0 2mm; color: #4338ca; font-family: monospace; font-size: 8pt; font-weight: 700; overflow-wrap: anywhere; }
+            .details { min-width: 0; width: 100%; flex: 0 0 auto; text-align: center; }
+            .label { margin: 0 0 1.5mm; color: #4f46e5; font-size: 6.5pt; font-weight: 700; letter-spacing: .6pt; }
+            .id { margin: 0 0 1.5mm; color: #4338ca; font-family: monospace; font-size: 8pt; font-weight: 700; overflow-wrap: anywhere; }
             .name { margin: 0 0 1mm; font-size: 10pt; line-height: 1.15; font-weight: 700; overflow-wrap: anywhere; }
             .position { margin: 0 0 1mm; color: #475569; font-size: 7.5pt; }
             .department { margin: 0; color: #64748b; font-size: 7pt; line-height: 1.15; overflow-wrap: anywhere; }
