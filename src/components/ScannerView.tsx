@@ -225,7 +225,9 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
               <div>
                 <span className="text-emerald-400 font-bold uppercase tracking-wider">KONTEKS EVENT AKTIF: </span>
                 <span className="text-white font-semibold">{activeEvent.name}</span>
-                <span className="text-slate-400 ml-2 font-mono">({activeEvent.category} • {activeEvent.location})</span>
+                <span className="text-slate-400 ml-2 font-mono">
+                  ({activeEvent.category}{activeEvent.location !== 'Tidak dinyatakan' ? ` • ${activeEvent.location}` : ''})
+                </span>
               </div>
             </div>
             <span className="bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded text-[11px] font-bold">

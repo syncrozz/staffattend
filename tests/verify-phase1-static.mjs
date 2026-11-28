@@ -17,6 +17,8 @@ const rules = fs.readFileSync('firestore.rules', 'utf8');
 const attendanceEngine = fs.readFileSync('src/services/attendanceEngine.ts', 'utf8');
 const institutionContext = fs.readFileSync('src/contexts/InstitutionContext.tsx', 'utf8');
 const staffDirectory = fs.readFileSync('src/components/StaffDirectoryView.tsx', 'utf8');
+const eventManagement = fs.readFileSync('src/components/EventManagementView.tsx', 'utf8');
+const app = fs.readFileSync('src/App.tsx', 'utf8');
 
 test('Firebase CLI target is explicitly pinned to syncrozzstaffattend and never syncrozz2', () => {
   assert.equal(firebaserc.projects?.default, 'syncrozzstaffattend');
@@ -132,4 +134,20 @@ test('staff directory renders aligned horizontal rows with a mobile scroll regio
   assert.match(staffDirectory, /setSearchTerm\(/);
   assert.match(staffDirectory, /setDepartmentFilter\(/);
   assert.match(staffDirectory, /onClick=\{handleExportCSV\}/);
+});
+
+test('event creation targets active staff departments and generates session remarks', () => {
+  const createStart = eventManagement.indexOf('{/* Modal: Create New Event */}');
+  const detailStart = eventManagement.indexOf('{/* Modal: Event Detail Attendee List */}', createStart);
+  const createForm = eventManagement.slice(createStart, detailStart);
+
+  assert.match(eventManagement, /staffList:\s*Staff\[\]/);
+  assert.match(app, /<EventManagementView[\s\S]*?staffList=\{staffList\}/);
+  assert.match(eventManagement, /staffList\.filter\(\(staff\) => staff\.status === 'ACTIVE'\)/);
+  assert.match(eventManagement, /targetCount:\s*targetStaff\.length/);
+  assert.match(eventManagement, /location:\s*'Tidak dinyatakan'/);
+  assert.match(eventManagement, /buildSessionRemarks\(/);
+  assert.match(createForm, /Sasaran Bahagian/);
+  assert.match(createForm, /Semua Bahagian/);
+  assert.doesNotMatch(createForm, /Lokasi Acara/);
 });

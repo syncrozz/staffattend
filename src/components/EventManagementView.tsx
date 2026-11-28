@@ -6,14 +6,16 @@ import {
   Clock,
   MapPin,
   Search,
-  Eye
+  Eye,
+  Users
 } from 'lucide-react';
-import { EventItem, EventStatus, EventCategory, AttendanceRecord } from '../types';
+import { EventItem, EventStatus, EventCategory, AttendanceRecord, Staff } from '../types';
 import { formatDisplayName } from '../utils/staffUtils';
 
 interface EventManagementViewProps {
   events: EventItem[];
   attendanceRecords: AttendanceRecord[];
+  staffList: Staff[];
   isInstitutionAdmin: boolean;
   canScan: boolean;
   onSetEventStatus: (eventId: string, newStatus: EventStatus) => Promise<void>;
@@ -23,9 +25,23 @@ interface EventManagementViewProps {
   onOpenScannerForEvent: (eventId: string) => void;
 }
 
+function buildSessionRemarks(date: string, startTime: string, endTime: string, audience: string): string {
+  const formattedDate = new Date(`${date}T00:00:00`).toLocaleDateString('ms-MY', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  return `Jadual buka sesi: ${formattedDate}, ${startTime}.\nJadual tutup sesi: ${formattedDate}, ${endTime}.\nSasaran bahagian: ${audience}.`.slice(
+    0,
+    1000
+  );
+}
+
 export const EventManagementView: React.FC<EventManagementViewProps> = ({
   events,
   attendanceRecords,
+  staffList,
   isInstitutionAdmin,
   canScan,
   onSetEventStatus,
@@ -45,10 +61,24 @@ export const EventManagementView: React.FC<EventManagementViewProps> = ({
     date: new Date().toISOString().split('T')[0],
     startTime: '09:00',
     endTime: '12:00',
-    location: 'Dewan Utama',
-    description: '',
-    targetCount: 20
+    targetDepartments: null as string[] | null
   });
+
+  const activeStaff = staffList.filter((staff) => staff.status === 'ACTIVE');
+  const availableDepartments = Array.from(
+    new Set<string>(activeStaff.map((staff) => staff.department.trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b));
+  const targetStaff = activeStaff.filter(
+    (staff) =>
+      formData.targetDepartments === null || formData.targetDepartments.includes(staff.department.trim())
+  );
+  const targetAudience =
+    formData.targetDepartments === null
+      ? 'Semua bahagian'
+      : formData.targetDepartments.length > 0
+      ? formData.targetDepartments.join(', ')
+      : 'Tiada bahagian dipilih';
+  const sessionRemarks = buildSessionRemarks(formData.date, formData.startTime, formData.endTime, targetAudience);
 
   const filteredEvents = events.filter((e) => {
     const matchesStatus = statusFilter === 'ALL' || e.status === statusFilter;
@@ -70,10 +100,10 @@ export const EventManagementView: React.FC<EventManagementViewProps> = ({
         date: formData.date,
         startTime: formData.startTime,
         endTime: formData.endTime,
-        location: formData.location.trim() || 'Dewan Utama',
+        location: 'Tidak dinyatakan',
         status: 'OPEN',
-        description: formData.description.trim(),
-        targetCount: Number(formData.targetCount) || 15
+        description: sessionRemarks,
+        targetCount: targetStaff.length
       });
 
       setIsCreateModalOpen(false);
@@ -83,9 +113,7 @@ export const EventManagementView: React.FC<EventManagementViewProps> = ({
         date: new Date().toISOString().split('T')[0],
         startTime: '09:00',
         endTime: '12:00',
-        location: 'Dewan Utama',
-        description: '',
-        targetCount: 20
+        targetDepartments: null
       });
     } finally {
       setIsSubmitting(false);
@@ -239,10 +267,17 @@ export const EventManagementView: React.FC<EventManagementViewProps> = ({
                         {event.date} • {event.startTime} - {event.endTime}
                       </span>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>{event.location}</span>
-                    </div>
+                    {event.location !== 'Tidak dinyatakan' && (
+                      <div className="flex items-center space-x-2">
+                        <MapPin className="w-3.5 h-3.5 text-indigo-400" />
+                        <span>{event.location}</span>
+                      </div>
+                    )}
+                    {event.description && (
+                      <p className="whitespace-pre-line text-[11px] leading-relaxed text-slate-500 line-clamp-3">
+                        {event.description}
+                      </p>
+                    )}
                   </div>
 
                   {/* Attendees counter */}
@@ -250,7 +285,7 @@ export const EventManagementView: React.FC<EventManagementViewProps> = ({
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-slate-400">Rekod Kehadiran:</span>
                       <span className="text-white font-bold font-mono">
-                        {attendeeCount} / {event.targetCount || '-'} orang
+                        {attendeeCount} / {event.targetCount ?? '-'} orang
                       </span>
                     </div>
                     <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
@@ -385,26 +420,72 @@ export const EventManagementView: React.FC<EventManagementViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1 font-semibold">Lokasi Acara</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Dewan Gemilang / Bilik Mesyuarat A"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="block text-slate-400 font-semibold">Sasaran Bahagian</label>
+                  <span className="text-[11px] text-indigo-300">{targetStaff.length} staf aktif</span>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">Pilih bahagian yang dijemput. Jumlah peserta dikira automatik.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    aria-pressed={formData.targetDepartments === null}
+                    onClick={() => setFormData({ ...formData, targetDepartments: null })}
+                    className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors cursor-pointer ${
+                      formData.targetDepartments === null
+                        ? 'border-indigo-400 bg-indigo-600/30 text-indigo-200'
+                        : 'border-slate-700 bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Semua Bahagian ({activeStaff.length})
+                  </button>
+                  {availableDepartments.map((department) => {
+                    const selected = formData.targetDepartments?.includes(department) ?? false;
+                    const departmentCount = activeStaff.filter(
+                      (staff) => staff.department.trim() === department
+                    ).length;
 
-              <div>
-                <label className="block text-slate-400 mb-1 font-semibold">Sasaran Jumlah Peserta</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={formData.targetCount}
-                  onChange={(e) => setFormData({ ...formData, targetCount: Number(e.target.value) })}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
-                />
+                    return (
+                      <button
+                        key={department}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() =>
+                          setFormData((current) => {
+                            const currentSelection = current.targetDepartments;
+                            const selection = currentSelection ?? [];
+                            const targetDepartments = selection.includes(department)
+                              ? selection.filter((item) => item !== department)
+                              : [...selection, department];
+
+                            return { ...current, targetDepartments };
+                          })
+                        }
+                        className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors cursor-pointer ${
+                          selected
+                            ? 'border-indigo-400 bg-indigo-600/30 text-indigo-200'
+                            : 'border-slate-700 bg-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {department} ({departmentCount})
+                      </button>
+                    );
+                  })}
+                </div>
+                {availableDepartments.length === 0 && (
+                  <p className="mt-2 text-[11px] text-amber-300">
+                    Tiada staf aktif ditemui. Tambah atau import staf untuk mengira sasaran bahagian.
+                  </p>
+                )}
+                <div className="mt-3 rounded-xl border border-slate-700/70 bg-slate-800/60 p-3">
+                  <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold text-slate-300">
+                    <Users className="h-3.5 w-3.5 text-indigo-400" />
+                    Nota sesi automatik
+                  </div>
+                  <p className="whitespace-pre-line text-[11px] leading-relaxed text-slate-400">{sessionRemarks}</p>
+                  <p className="mt-2 text-[10px] text-slate-500">
+                    Sesi akan terus berstatus OPEN selepas disimpan; waktu di atas ialah jadual sesi.
+                  </p>
+                </div>
               </div>
 
               <div className="pt-3 flex items-center justify-end space-x-2">
@@ -436,8 +517,14 @@ export const EventManagementView: React.FC<EventManagementViewProps> = ({
               <div>
                 <h3 className="font-bold text-base">{selectedEventForDetail.name}</h3>
                 <p className="text-xs text-slate-400">
-                  {selectedEventForDetail.date} • {selectedEventForDetail.location}
+                  {selectedEventForDetail.date}
+                  {selectedEventForDetail.location !== 'Tidak dinyatakan' && ` • ${selectedEventForDetail.location}`}
                 </p>
+                {selectedEventForDetail.description && (
+                  <p className="mt-1 whitespace-pre-line text-[11px] leading-relaxed text-slate-500">
+                    {selectedEventForDetail.description}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setSelectedEventForDetail(null)}

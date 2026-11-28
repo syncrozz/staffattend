@@ -292,6 +292,7 @@ export default function App() {
             <EventManagementView
               events={events}
               attendanceRecords={attendanceRecords}
+              staffList={staffList}
               isInstitutionAdmin={isInstitutionAdmin}
               canScan={isOperator}
               onSetEventStatus={handleSetEventStatus}
