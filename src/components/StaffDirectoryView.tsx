@@ -334,91 +334,119 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
         </div>
       </div>
 
-      {/* Staff Gallery Grid */}
+      {/* Staff horizontal directory */}
       {filteredStaff.length === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center text-xs text-slate-500">
           Tiada staf berdaftar dalam institusi ini.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {filteredStaff.map((staf) => (
-            <div
-              key={staf.id}
-              className="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 shadow-sm transition-all space-y-3 flex flex-col justify-between"
-            >
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
-                    alt={formatDisplayName(staf.name)}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
-                    }}
-                    className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/30 flex-shrink-0"
-                  />
-                  <div className="overflow-hidden">
-                    <span className="bg-indigo-500/20 text-indigo-300 font-mono font-bold text-[10px] px-2 py-0.5 rounded border border-indigo-500/30">
-                      {staf.id}
-                    </span>
-                    <h3 className="font-bold text-white text-xs sm:text-sm mt-1 truncate" title={formatDisplayName(staf.name)}>
-                      {formatDisplayName(staf.name)}
-                    </h3>
-                    <p className="text-[11px] text-slate-400 truncate">{staf.position}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-1 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
-                  <div className="flex items-center space-x-1.5 truncate">
-                    <Building2 className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                    <span className="truncate">{staf.department}</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5 truncate">
-                    <Mail className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                    <span className="truncate">{staf.email || '-'}</span>
-                  </div>
-                </div>
+        <div className="w-full min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/30">
+          <div
+            className="w-full min-w-0 overflow-x-auto overscroll-x-contain touch-pan-x"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+            aria-label="Direktori staf; leret mendatar untuk melihat semua lajur"
+            tabIndex={0}
+          >
+            <div className="min-w-[900px] space-y-2 p-2">
+              <div className="grid grid-cols-[52px_78px_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(170px,1.1fr)_184px] items-center gap-2.5 px-3 pb-1 text-[10px] font-bold tracking-wider text-slate-400">
+                <div>PROFIL</div>
+                <div>ID STAF</div>
+                <div>NAMA STAF / JAWATAN</div>
+                <div>JABATAN</div>
+                <div>EMEL</div>
+                <div className="text-right">TINDAKAN</div>
               </div>
 
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
-                <button
-                  id={`staff-card-qr-btn-${staf.id}`}
-                  onClick={() => setSelectedStaffForQR(staf)}
-                  className="flex-1 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold py-1.5 rounded-xl transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
-                >
-                  <QrCode className="w-3.5 h-3.5" />
-                  <span>Kad QR Staf</span>
-                </button>
-
-                {isInstitutionAdmin && canScan && (
-                  <button
-                    id={`staff-card-test-btn-${staf.id}`}
-                    onClick={() => {
-                      void onSimulateScan(staf.id);
-                    }}
-                    className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
-                    title="Uji imbas staf ini"
+              <div className="space-y-2">
+                {filteredStaff.map((staf) => (
+                  <div
+                    key={staf.id}
+                    className="grid grid-cols-[52px_78px_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(170px,1.1fr)_184px] min-h-[72px] items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 shadow-sm transition-colors hover:border-indigo-500/40"
                   >
-                    <Play className="w-3.5 h-3.5 text-emerald-400" />
-                  </button>
-                )}
+                    <div className="flex items-center justify-center">
+                      <img
+                        src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
+                        alt={formatDisplayName(staf.name)}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
+                        }}
+                        className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/30 flex-shrink-0"
+                      />
+                    </div>
 
-                {isInstitutionAdmin && onDeleteStaff && (
-                  <button
-                    id={`staff-card-delete-btn-${staf.id}`}
-                    onClick={() => {
-                      if (window.confirm(`Padam staf ${formatDisplayName(staf.name)} (${staf.id})?`)) {
-                        void onDeleteStaff(staf.id);
-                      }
-                    }}
-                    className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl transition-colors cursor-pointer"
-                    title="Padam staf ini"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                    <div className="min-w-0">
+                      <span className="inline-block max-w-full truncate bg-indigo-500/20 text-indigo-300 font-mono font-bold text-[10px] px-2 py-1 rounded border border-indigo-500/30">
+                        {staf.id}
+                      </span>
+                    </div>
+
+                    <div className="min-w-0">
+                      <h3
+                        className="truncate font-bold text-white text-xs sm:text-sm"
+                        title={formatDisplayName(staf.name)}
+                      >
+                        {formatDisplayName(staf.name)}
+                      </h3>
+                      <p className="truncate text-[11px] text-slate-400" title={staf.position}>
+                        {staf.position}
+                      </p>
+                    </div>
+
+                    <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-400" title={staf.department}>
+                      <Building2 className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                      <span className="truncate">{staf.department}</span>
+                    </div>
+
+                    <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-400" title={staf.email || '-'}>
+                      <Mail className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                      <span className="truncate">{staf.email || '-'}</span>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                      <button
+                        id={`staff-card-qr-btn-${staf.id}`}
+                        onClick={() => setSelectedStaffForQR(staf)}
+                        className="flex items-center justify-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-600/20 px-2.5 py-2 text-xs font-semibold text-indigo-300 transition-colors hover:bg-indigo-600/30 cursor-pointer"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        <span>Kad QR</span>
+                      </button>
+
+                      {isInstitutionAdmin && canScan && (
+                        <button
+                          id={`staff-card-test-btn-${staf.id}`}
+                          onClick={() => {
+                            void onSimulateScan(staf.id);
+                          }}
+                          className="rounded-lg bg-slate-800 p-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white cursor-pointer"
+                          title="Uji imbas staf ini"
+                          aria-label={`Uji imbas ${formatDisplayName(staf.name)}`}
+                        >
+                          <Play className="w-3.5 h-3.5 text-emerald-400" />
+                        </button>
+                      )}
+
+                      {isInstitutionAdmin && onDeleteStaff && (
+                        <button
+                          id={`staff-card-delete-btn-${staf.id}`}
+                          onClick={() => {
+                            if (window.confirm(`Padam staf ${formatDisplayName(staf.name)} (${staf.id})?`)) {
+                              void onDeleteStaff(staf.id);
+                            }
+                          }}
+                          className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-400 transition-colors hover:bg-rose-500/20 cursor-pointer"
+                          title="Padam staf ini"
+                          aria-label={`Padam ${formatDisplayName(staf.name)}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
+          </div>
         </div>
       )}
 

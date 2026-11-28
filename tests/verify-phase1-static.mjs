@@ -16,6 +16,7 @@ const appletConfig = JSON.parse(fs.readFileSync('firebase-applet-config.json', '
 const rules = fs.readFileSync('firestore.rules', 'utf8');
 const attendanceEngine = fs.readFileSync('src/services/attendanceEngine.ts', 'utf8');
 const institutionContext = fs.readFileSync('src/contexts/InstitutionContext.tsx', 'utf8');
+const staffDirectory = fs.readFileSync('src/components/StaffDirectoryView.tsx', 'utf8');
 
 test('Firebase CLI target is explicitly pinned to syncrozzstaffattend and never syncrozz2', () => {
   assert.equal(firebaserc.projects?.default, 'syncrozzstaffattend');
@@ -104,4 +105,30 @@ test('createInstitution rejects an existing institution before writing its batch
   assert.notEqual(existingCheck, -1, 'createInstitution must check whether the institution document exists');
   assert.ok(batchWrite > existingCheck, 'the duplicate check must happen before the institution write');
   assert.match(createBody, /instSnap\.exists\(\)/);
+});
+
+test('staff directory renders aligned horizontal rows with a mobile scroll region', () => {
+  const directoryStart = staffDirectory.indexOf('{/* Staff horizontal directory */}');
+  const directoryEnd = staffDirectory.indexOf('{/* Modal: Add New Staff */}', directoryStart);
+  const directoryMarkup = staffDirectory.slice(directoryStart, directoryEnd);
+
+  assert.notEqual(directoryStart, -1);
+  assert.notEqual(directoryEnd, -1);
+  assert.match(directoryMarkup, /overflow-x-auto/);
+  assert.match(directoryMarkup, /WebkitOverflowScrolling:\s*'touch'/);
+  assert.match(directoryMarkup, /min-w-\[900px\]/);
+  assert.equal((directoryMarkup.match(/grid-cols-\[52px_78px_minmax\(/g) || []).length, 2);
+  assert.match(directoryMarkup, /ID STAF/);
+  assert.match(directoryMarkup, /NAMA STAF \/ JAWATAN/);
+  assert.match(directoryMarkup, /JABATAN/);
+  assert.match(directoryMarkup, /EMEL/);
+  assert.match(directoryMarkup, /TINDAKAN/);
+  assert.doesNotMatch(directoryMarkup, /lg:grid-cols-4/);
+  assert.match(directoryMarkup, /staff-card-qr-btn-/);
+  assert.match(directoryMarkup, /staff-card-test-btn-/);
+  assert.match(directoryMarkup, /staff-card-delete-btn-/);
+  assert.match(staffDirectory, /const filteredStaff = staffList\.filter/);
+  assert.match(staffDirectory, /setSearchTerm\(/);
+  assert.match(staffDirectory, /setDepartmentFilter\(/);
+  assert.match(staffDirectory, /onClick=\{handleExportCSV\}/);
 });
