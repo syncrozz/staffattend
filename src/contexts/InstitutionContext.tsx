@@ -39,7 +39,7 @@ interface InstitutionContextValue {
   allInstitutions: Institution[];
   institutionReady: boolean;
   selectInstitution: (institutionId: string) => void;
-  createInstitution: (input: { name: string; code: string; domain?: string; defaultEmailDomain?: string; avatarBaseUrl?: string }) => Promise<string>;
+  createInstitution: (input: { name: string; code: string; domain?: string; defaultEmailDomain?: string }) => Promise<string>;
   toggleInstitutionStatus: (institutionId: string, status: 'ACTIVE' | 'SUSPENDED') => Promise<void>;
   assignInstitutionMember: (input: {
     institutionId: string;
@@ -257,7 +257,6 @@ export const InstitutionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       code: string;
       domain?: string;
       defaultEmailDomain?: string;
-      avatarBaseUrl?: string;
     }): Promise<string> => {
       if (!user || !isPlatformOwner) {
         throw new Error('Hanya Platform Owner yang disahkan boleh mencipta institusi.');
@@ -297,7 +296,6 @@ export const InstitutionProvider: React.FC<{ children: React.ReactNode }> = ({ c
       batch.set(settingsRef, {
         institutionId: instId,
         ...(input.defaultEmailDomain ? { defaultEmailDomain: input.defaultEmailDomain.trim().slice(0, 150) } : {}),
-        ...(input.avatarBaseUrl ? { avatarBaseUrl: input.avatarBaseUrl.trim().slice(0, 500) } : {}),
         qrPrefix: 'STAFF',
         allowManualOverride: true,
         requireAuthorizedDevice: false,

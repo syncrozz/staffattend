@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { EventItem, Staff, AttendanceRecord, ScanResult } from '../types';
-import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK, formatDisplayName } from '../utils/staffUtils';
+import { formatDisplayName } from '../utils/staffUtils';
 
 interface DashboardViewProps {
   activeEvent: EventItem | null;
@@ -22,7 +22,6 @@ interface DashboardViewProps {
   attendanceRecords: AttendanceRecord[];
   isInstitutionAdmin: boolean;
   canScan: boolean;
-  avatarBaseUrl?: string;
   onOpenScanner: () => void;
   onGoToEvents: () => void;
   onGoToStaff: () => void;
@@ -36,7 +35,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   attendanceRecords,
   isInstitutionAdmin,
   canScan,
-  avatarBaseUrl,
   onOpenScanner,
   onGoToEvents,
   onGoToStaff,
@@ -293,22 +291,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       : 'bg-slate-800/80 border-slate-700/80 hover:bg-slate-700 hover:border-indigo-500/50'
                   }`}
                 >
-                  <div className="relative">
-                    <img
-                      src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
-                      alt={formatDisplayName(staf.name)}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
-                      }}
-                      className="w-8 h-8 rounded-full object-cover border border-slate-600"
-                    />
+                  <div className="min-w-0 flex-1 overflow-hidden">
                     {isHadir && (
-                      <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-white rounded-full p-0.5 text-[8px]">
+                      <span className="inline-flex bg-emerald-500 text-white rounded-full p-0.5 text-[8px] mb-1">
                         <CheckCircle2 className="w-3 h-3" />
                       </span>
                     )}
-                  </div>
-                  <div className="overflow-hidden">
                     <div className="text-[11px] font-semibold text-white truncate">
                       {formatDisplayName(`${staf.name.split(' ')[0]} ${staf.name.split(' ')[1] || ''}`)}
                     </div>

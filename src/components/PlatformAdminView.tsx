@@ -33,8 +33,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
     name: '',
     code: '',
     domain: '',
-    defaultEmailDomain: '',
-    avatarBaseUrl: ''
+    defaultEmailDomain: ''
   });
   const [memberForm, setMemberForm] = useState({
     institutionId: activeInstitutionId || '',
@@ -63,7 +62,7 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
     try {
       const id = await createInstitution(instForm);
       setStatusMsg(`Institusi "${instForm.name}" (${id}) berjaya diwujudkan.`);
-      setInstForm({ name: '', code: '', domain: '', defaultEmailDomain: '', avatarBaseUrl: '' });
+      setInstForm({ name: '', code: '', domain: '', defaultEmailDomain: '' });
       setMemberForm((prev) => ({ ...prev, institutionId: id }));
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Gagal mencipta institusi.');
@@ -167,16 +166,6 @@ export const PlatformAdminView: React.FC<PlatformAdminViewProps> = ({
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
               />
             </div>
-          </div>
-          <div>
-            <label className="block text-slate-400 mb-1">URL Asas Avatar Staf (Pilihan)</label>
-            <input
-              type="url"
-              placeholder="https://.../Gambar%20Staff"
-              value={instForm.avatarBaseUrl}
-              onChange={(e) => setInstForm({ ...instForm, avatarBaseUrl: e.target.value })}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
-            />
           </div>
           <button
             type="submit"

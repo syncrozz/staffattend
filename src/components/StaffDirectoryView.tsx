@@ -15,7 +15,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { Staff, ScanResult } from '../types';
 import { exportStaffToCSV } from '../utils/csvHelper';
-import { buildStaffImageUrl, formatDisplayName } from '../utils/staffUtils';
+import { formatDisplayName } from '../utils/staffUtils';
 
 interface StaffDirectoryViewProps {
   staffList: Staff[];
@@ -24,7 +24,6 @@ interface StaffDirectoryViewProps {
   canScan: boolean;
   qrPrefix?: string;
   defaultEmailDomain?: string;
-  avatarBaseUrl?: string;
   onAddStaff: (newStaff: Staff) => Promise<void>;
   onDeleteStaff?: (staffId: string) => Promise<void>;
   onSimulateScan: (staffId: string) => Promise<ScanResult>;
@@ -63,7 +62,6 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
   canScan,
   qrPrefix = 'STAFF',
   defaultEmailDomain,
-  avatarBaseUrl,
   onAddStaff,
   onDeleteStaff,
   onSimulateScan,
@@ -130,7 +128,6 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
         email: formData.email.trim() || fallbackEmail,
         ...(formData.phone.trim() ? { phone: formData.phone.trim() } : {}),
         status: 'ACTIVE',
-        avatarUrl: buildStaffImageUrl(cleanId, avatarBaseUrl)
       });
 
       setIsAddModalOpen(false);

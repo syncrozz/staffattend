@@ -1,5 +1,4 @@
 import { Staff } from '../types';
-import { buildStaffImageUrl } from './staffUtils';
 
 export interface CSVImportResult {
   added: Staff[];
@@ -11,7 +10,6 @@ export interface CSVImportResult {
 export interface CSVImportContext {
   institutionId: string;
   defaultEmailDomain?: string;
-  avatarBaseUrl?: string;
 }
 
 /**
@@ -149,8 +147,7 @@ export function processStaffCSV(
       position,
       email,
       ...(phone ? { phone } : {}),
-      status: existing?.status || 'ACTIVE',
-      avatarUrl: existing?.avatarUrl || buildStaffImageUrl(id, context.avatarBaseUrl)
+      status: existing?.status || 'ACTIVE'
     };
 
     if (existing) {

@@ -10,7 +10,6 @@ interface CSVImportModalProps {
   onClose: () => void;
   institutionId: string;
   defaultEmailDomain?: string;
-  avatarBaseUrl?: string;
   currentStaffList: Staff[];
   onSyncComplete: (staffToUpsert: Staff[], summary: { addedCount: number; updatedCount: number }) => Promise<void>;
 }
@@ -20,7 +19,6 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
   onClose,
   institutionId,
   defaultEmailDomain,
-  avatarBaseUrl,
   currentStaffList,
   onSyncComplete
 }) => {
@@ -35,8 +33,7 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({
   const parseText = (text: string) => {
     return processStaffCSV(text, currentStaffList, {
       institutionId,
-      defaultEmailDomain,
-      avatarBaseUrl
+      defaultEmailDomain
     });
   };
 

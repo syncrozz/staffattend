@@ -23,7 +23,6 @@ export const InstitutionSettingsView: React.FC = () => {
 
   const [settingsForm, setSettingsForm] = useState({
     defaultEmailDomain: '',
-    avatarBaseUrl: '',
     qrPrefix: 'STAFF',
     allowManualOverride: true,
     requireAuthorizedDevice: false,
@@ -44,7 +43,6 @@ export const InstitutionSettingsView: React.FC = () => {
     if (activeSettings) {
       setSettingsForm({
         defaultEmailDomain: activeSettings.defaultEmailDomain || '',
-        avatarBaseUrl: activeSettings.avatarBaseUrl || '',
         qrPrefix: activeSettings.qrPrefix || 'STAFF',
         allowManualOverride: activeSettings.allowManualOverride,
         requireAuthorizedDevice: activeSettings.requireAuthorizedDevice,
@@ -164,17 +162,6 @@ export const InstitutionSettingsView: React.FC = () => {
               className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono"
             />
           </div>
-        </div>
-
-        <div>
-          <label className="block text-slate-400 mb-1">URL Asas Avatar Staf (Pilihan)</label>
-          <input
-            type="url"
-            placeholder="https://.../avatar-folder"
-            value={settingsForm.avatarBaseUrl}
-            onChange={(e) => setSettingsForm({ ...settingsForm, avatarBaseUrl: e.target.value })}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white"
-          />
         </div>
 
         <div className="flex flex-wrap gap-4 pt-1">

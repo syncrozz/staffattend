@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { EventItem, Staff, ScanResult, ScanMethod } from '../types';
-import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK, formatDisplayName } from '../utils/staffUtils';
+import { formatDisplayName } from '../utils/staffUtils';
 
 interface ScannerViewProps {
   activeEvent: EventItem | null;
@@ -21,7 +21,6 @@ interface ScannerViewProps {
   canScan: boolean;
   allowManualOverride: boolean;
   qrPrefix?: string;
-  avatarBaseUrl?: string;
   onProcessScan: (qrString: string, method: ScanMethod) => Promise<ScanResult>;
   onGoToEvents: () => void;
   soundEnabled: boolean;
@@ -35,7 +34,6 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
   canScan,
   allowManualOverride,
   qrPrefix = 'STAFF',
-  avatarBaseUrl,
   onProcessScan,
   onGoToEvents,
   soundEnabled,
@@ -370,15 +368,7 @@ export const ScannerView: React.FC<ScannerViewProps> = ({
                     disabled={isPaused || isSubmitting}
                     className="p-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 hover:border-indigo-500/50 rounded-xl transition-all text-left cursor-pointer group flex items-center space-x-3 disabled:opacity-50"
                   >
-                    <img
-                      src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
-                      alt={formatDisplayName(staf.name)}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
-                      }}
-                      className="w-10 h-10 rounded-full object-cover border border-slate-600 flex-shrink-0"
-                    />
-                    <div className="overflow-hidden">
+                    <div className="min-w-0 flex-1 overflow-hidden">
                       <div className="text-xs font-semibold text-white group-hover:text-indigo-300 transition-colors truncate">
                         {formatDisplayName(staf.name)}
                       </div>

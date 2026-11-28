@@ -261,7 +261,6 @@ export default function App() {
               attendanceRecords={attendanceRecords}
               isInstitutionAdmin={isInstitutionAdmin}
               canScan={isOperator}
-              avatarBaseUrl={activeSettings?.avatarBaseUrl}
               onOpenScanner={() => setActiveTab('scanner')}
               onGoToEvents={() => setActiveTab('events')}
               onGoToStaff={() => setActiveTab('staff')}
@@ -280,7 +279,6 @@ export default function App() {
               canScan={isOperator}
               allowManualOverride={activeSettings?.allowManualOverride ?? true}
               qrPrefix={activeSettings?.qrPrefix || 'STAFF'}
-              avatarBaseUrl={activeSettings?.avatarBaseUrl}
               onProcessScan={handleProcessScan}
               onGoToEvents={() => setActiveTab('events')}
               soundEnabled={soundEnabled}
@@ -311,7 +309,6 @@ export default function App() {
               canScan={isOperator}
               qrPrefix={activeSettings?.qrPrefix || 'STAFF'}
               defaultEmailDomain={activeSettings?.defaultEmailDomain}
-              avatarBaseUrl={activeSettings?.avatarBaseUrl}
               onAddStaff={handleAddStaff}
               onDeleteStaff={handleDeleteStaff}
               onSimulateScan={handleQuickSimulateScan}
@@ -338,7 +335,6 @@ export default function App() {
           onClose={() => setIsCSVModalOpen(false)}
           institutionId={activeInstitutionId}
           defaultEmailDomain={activeSettings?.defaultEmailDomain}
-          avatarBaseUrl={activeSettings?.avatarBaseUrl}
           currentStaffList={staffList}
           onSyncComplete={handleSyncCSVComplete}
         />
