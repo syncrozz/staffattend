@@ -364,3 +364,77 @@ At minimum include tests for:
 **Authorized Session Access = Visibility of the Complete Session Register.**
 
 The operator should focus on the activity and attendance. STAFFATTEND should handle institution context, department ownership, access, device binding, attendance validation and consolidated reporting behind the scenes.
+
+
+---
+
+## 19. Temporary Report Sharing — approved clarification
+
+This section is an approved clarification and supersedes any conflicting wording in Sections 2, 8, 9, 12, 14, 16 and 17. It does not authorize application-code implementation by itself.
+
+### 19.1 Default report access
+
+- Ordinary institution users and ordinary staff do not receive automatic access to attendance reports.
+- Internal full-register access is limited to the session owner, the authorized Department Manager for the owning department, and an Operator who is actively authorized to operate that specific session.
+- Audience/attendance eligibility does not grant report access.
+- Do not create broad department-wide report visibility by default.
+- Institution Admin access to department-owned records continues to follow the post-session sharing decision in Section 9.
+
+### 19.2 Temporary share-link scopes
+
+An authorized session owner (or authorized Department Manager acting for a department-owned session) may generate a temporary, read-only report link in either scope:
+
+1. **Single Session Instance** — exposes the report for exactly one selected occurrence.
+2. **Session Series** — exposes a consolidated report for the selected series, limited to instances the link creator is authorized to share.
+
+The creator chooses the scope when generating the link. A link for one instance must never expose sibling instances. A series link must not cross institution boundaries or include instances outside the creator's authority.
+
+### 19.3 Link behaviour and expiry
+
+- The link is a bearer credential: anyone possessing it can view the scoped report until it expires or is revoked. The UI must clearly warn the creator before sharing.
+- Link validity is exactly 24 hours from generation, based on server timestamps, not first access.
+- The creator can revoke a link before expiry.
+- A recipient gets read-only report access only. The link does not grant application login, session management, scanning, attendance editing, or access to other institution data.
+- The report may reflect current attendance while a session is OPEN and the final report after it is CLOSED; the view remains read-only.
+- Expired or revoked links must fail on every access attempt. Scheduled deletion is cleanup only and must not be relied on for enforcement.
+- Generating another link does not silently change the scope of an existing link. Each link has its own expiry and revocation state; the owner can revoke older links explicitly.
+
+### 19.4 Security architecture
+
+- Generate an opaque cryptographically random token with at least 128 bits of entropy (prefer 256 bits).
+- Store only a secure hash of the token; do not store the raw bearer token.
+- The URL contains only the opaque token, not institution IDs, session IDs, or other sensitive identifiers as a substitute for authorization.
+- Store metadata such as token hash, scope type (INSTANCE or SERIES), scope ID, institution ID, creator UID, createdAt, expiresAt, revokedAt/status and any fixed report-filter configuration.
+- Validate token hash, expiry, revocation, scope, institution and creator authority on every report request.
+- Do not expose Firestore collections or broaden Firestore rules for anonymous access.
+- Use a trusted HTTPS backend endpoint/callable function to validate the bearer token and return only the minimum report data required by the read-only report page.
+- Apply reasonable rate limiting and avoid logging raw tokens. Do not include raw tokens in analytics, error messages or audit metadata.
+- Assess Cloud Functions/endpoint operational cost and read volume before implementation; document the chosen approach and its trade-offs.
+
+### 19.5 Audit and management
+
+- Record link generation, revocation and access-scope metadata in the institution audit log. Never record the raw token.
+- Provide the creator with a way to see active links for sessions/series they own and revoke them.
+- A revoked or expired link cannot be reactivated; generate a new link instead.
+- Audit events must identify actor, scope, timestamp and action.
+
+### 19.6 Required tests
+
+- Ordinary users cannot access reports by default.
+- Owner/authorized Department Manager can generate a link for one instance or one series.
+- Instance link exposes only that instance.
+- Series link exposes only authorized instances in that series and institution.
+- Link works without recipient login but grants report read-only access only.
+- Link expires 24 hours after server-side generation time, including if it was never opened.
+- Revoked link fails immediately.
+- Expired/revoked links cannot access data through alternate report API calls.
+- Guessing/changing token, scope ID, institution ID or URL path cannot expand access.
+- Raw token is not stored or written to logs/audit records.
+- OPEN report reflects current register; CLOSED report reflects final register.
+- Link generation/revocation is auditable.
+
+### 19.7 Updated access principle
+
+**No automatic report access for ordinary users.**  
+**Temporary bearer link = read-only access to one Session Instance or one Session Series for 24 hours.**  
+**The link grants no other STAFFATTEND permissions.**
