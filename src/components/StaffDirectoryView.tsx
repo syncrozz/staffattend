@@ -15,7 +15,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import { Staff, ScanResult } from '../types';
 import { exportStaffToCSV } from '../utils/csvHelper';
-import { buildStaffImageUrl, DEFAULT_AVATAR_FALLBACK, formatDisplayName } from '../utils/staffUtils';
+import { buildStaffImageUrl, formatDisplayName } from '../utils/staffUtils';
 
 interface StaffDirectoryViewProps {
   staffList: Staff[];
@@ -348,8 +348,7 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
             tabIndex={0}
           >
             <div className="min-w-[900px] space-y-2 p-2">
-              <div className="grid grid-cols-[52px_78px_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(170px,1.1fr)_184px] items-center gap-2.5 px-3 pb-1 text-[10px] font-bold tracking-wider text-slate-400">
-                <div>PROFIL</div>
+              <div className="grid grid-cols-[78px_minmax(180px,1.25fr)_minmax(135px,0.9fr)_minmax(200px,1.2fr)_184px] items-center gap-2.5 px-3 pb-1 text-[10px] font-bold tracking-wider text-slate-400">
                 <div>ID STAF</div>
                 <div>NAMA STAF / JAWATAN</div>
                 <div>JABATAN</div>
@@ -361,19 +360,8 @@ export const StaffDirectoryView: React.FC<StaffDirectoryViewProps> = ({
                 {filteredStaff.map((staf) => (
                   <div
                     key={staf.id}
-                    className="grid grid-cols-[52px_78px_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(170px,1.1fr)_184px] min-h-[72px] items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 shadow-sm transition-colors hover:border-indigo-500/40"
+                    className="grid grid-cols-[78px_minmax(180px,1.25fr)_minmax(135px,0.9fr)_minmax(200px,1.2fr)_184px] min-h-[72px] items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2.5 shadow-sm transition-colors hover:border-indigo-500/40"
                   >
-                    <div className="flex items-center justify-center">
-                      <img
-                        src={staf.avatarUrl || buildStaffImageUrl(staf.id, avatarBaseUrl)}
-                        alt={formatDisplayName(staf.name)}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = DEFAULT_AVATAR_FALLBACK;
-                        }}
-                        className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/30 flex-shrink-0"
-                      />
-                    </div>
-
                     <div className="min-w-0">
                       <span className="inline-block max-w-full truncate bg-indigo-500/20 text-indigo-300 font-mono font-bold text-[10px] px-2 py-1 rounded border border-indigo-500/30">
                         {staf.id}

@@ -117,7 +117,8 @@ test('staff directory renders aligned horizontal rows with a mobile scroll regio
   assert.match(directoryMarkup, /overflow-x-auto/);
   assert.match(directoryMarkup, /WebkitOverflowScrolling:\s*'touch'/);
   assert.match(directoryMarkup, /min-w-\[900px\]/);
-  assert.equal((directoryMarkup.match(/grid-cols-\[52px_78px_minmax\(/g) || []).length, 2);
+  assert.equal((directoryMarkup.match(/grid-cols-\[78px_minmax\(180px,1\.25fr\)/g) || []).length, 2);
+  assert.doesNotMatch(directoryMarkup, /<img\b/);
   assert.match(directoryMarkup, /ID STAF/);
   assert.match(directoryMarkup, /NAMA STAF \/ JAWATAN/);
   assert.match(directoryMarkup, /JABATAN/);
